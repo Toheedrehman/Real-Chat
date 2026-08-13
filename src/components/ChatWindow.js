@@ -20,8 +20,7 @@ export default function ChatWindow({
   currentUid,
   selectedUser,
 }) {
-  const bottomRef =
-    useRef(null);
+  const bottomRef = useRef(null);
 
   const {
     messages,
@@ -48,16 +47,14 @@ export default function ChatWindow({
   }, [
     messages,
     selectedUser,
+    markMessagesSeen,
   ]);
 
   if (!selectedUser) {
     return (
       <main className="empty-chat">
-
         <div className="empty-chat-icon">
-          <MessageCircle
-            size={45}
-          />
+          <MessageCircle size={45} />
         </div>
 
         <h2>
@@ -68,29 +65,23 @@ export default function ChatWindow({
           Select a friend to start
           chatting.
         </p>
-
       </main>
     );
   }
 
   return (
     <main className="chat-window">
-
       <ChatHeader
         user={selectedUser}
       />
 
       <div className="messages-area">
-
         {loading ? (
           <div className="messages-loading">
             Loading messages...
           </div>
-        ) : messages.length ===
-          0 ? (
-
+        ) : messages.length === 0 ? (
           <div className="conversation-empty">
-
             <Avatar
               user={selectedUser}
               size="large"
@@ -105,24 +96,17 @@ export default function ChatWindow({
               {selectedUser.name ||
                 "your friend"}.
             </p>
-
           </div>
-
         ) : (
-
-          messages.map(
-            (message) => (
-              <Message
-                key={message.id}
-                message={message}
-              />
-            )
-          )
-
+          messages.map((message) => (
+            <Message
+              key={message.id}
+              message={message}
+            />
+          ))
         )}
 
         <div ref={bottomRef} />
-
       </div>
 
       <MessageInput
@@ -130,7 +114,6 @@ export default function ChatWindow({
         onSendImage={sendImage}
         disabled={sending}
       />
-
     </main>
   );
 }
