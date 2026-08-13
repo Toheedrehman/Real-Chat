@@ -3367,7 +3367,531 @@ body.dark-mode .icon-button {
   color: #cbd5e1 !important;
 }
 
+/* RESPONSIVE SETTINGS */
 
+.settings-page {
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.settings-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.setting-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.setting-option {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.option-left {
+  min-width: 0;
+  flex: 1;
+}
+
+.option-left > div:last-child {
+  min-width: 0;
+}
+
+.option-left span {
+  overflow-wrap: anywhere;
+}
+
+/* Tablet */
+@media (max-width: 767px) {
+  .settings-page {
+    padding: 24px 16px 40px;
+  }
+
+  .setting-section {
+    padding: 20px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 520px) {
+  .settings-page {
+    padding: 16px 10px 30px;
+  }
+
+  .settings-header {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .settings-header h1 {
+    font-size: 25px;
+  }
+
+  .settings-header p {
+    font-size: 13px;
+  }
+
+  .settings-container {
+    width: 100%;
+  }
+
+  .setting-section {
+    width: 100%;
+    padding: 17px;
+    border-radius: 15px;
+  }
+
+  .setting-heading {
+    gap: 11px;
+  }
+
+  .setting-option {
+    gap: 10px;
+  }
+
+  .option-left {
+    gap: 10px;
+  }
+
+  .option-left strong {
+    font-size: 14px;
+  }
+
+  .option-left span {
+    font-size: 12px;
+  }
+
+  .toggle,
+  .radio-button {
+    flex-shrink: 0;
+  }
+}
+
+/* Small phones */
+@media (max-width: 380px) {
+  .settings-page {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .setting-section {
+    padding: 14px;
+  }
+
+  .settings-header h1 {
+    font-size: 23px;
+  }
+
+  .option-left strong {
+    font-size: 13px;
+  }
+
+  .option-left span {
+    font-size: 11px;
+  }
+}
+
+/* =========================================================
+   FINAL SETTINGS RESPONSIVE FIX
+   ========================================================= */
+
+/* Fix the settings sections */
+.settings-page .settings-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 25px 40px;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  background: transparent;
+}
+
+/* VERY IMPORTANT:
+   Settings sections must NOT be flex rows */
+.settings-page .setting-section {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  display: block !important;
+
+  box-sizing: border-box;
+  overflow: hidden;
+
+  padding: 20px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+
+  background: #ffffff;
+}
+
+/* Section heading */
+.settings-page .setting-heading {
+  width: 100%;
+  min-width: 0;
+
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+
+  gap: 12px;
+
+  margin-bottom: 18px;
+  padding: 0;
+
+  box-sizing: border-box;
+}
+
+.settings-page .setting-heading > div:last-child {
+  min-width: 0;
+  flex: 1;
+}
+
+/* Each setting row */
+.settings-page .setting-option {
+  width: 100%;
+  min-width: 0;
+
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+
+  gap: 15px;
+
+  min-height: 65px;
+  padding: 12px 0;
+
+  box-sizing: border-box;
+
+  border-top: 1px solid #edf0f4;
+}
+
+/* Left side: icon + text */
+.settings-page .option-left {
+  width: auto;
+  min-width: 0;
+
+  flex: 1 1 auto;
+
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+
+  gap: 12px;
+}
+
+/* Icon */
+.settings-page .option-icon {
+  width: 38px;
+  height: 38px;
+
+  min-width: 38px;
+  flex: 0 0 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Text wrapper */
+.settings-page .option-left > div:last-child {
+  width: auto;
+  min-width: 0;
+
+  flex: 1 1 auto;
+}
+
+/* Title */
+.settings-page .option-left strong {
+  display: block;
+
+  width: auto;
+  max-width: 100%;
+
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Description */
+.settings-page .option-left span {
+  display: block;
+
+  width: auto;
+  max-width: 100%;
+
+  margin-top: 3px;
+
+  font-size: 12px;
+  line-height: 1.45;
+
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+/* Radio */
+.settings-page .radio-button {
+  width: 23px;
+  height: 23px;
+
+  min-width: 23px;
+  flex: 0 0 23px;
+
+  flex-shrink: 0;
+}
+
+/* Toggle */
+.settings-page .toggle {
+  width: 48px;
+  height: 27px;
+
+  min-width: 48px;
+  flex: 0 0 48px;
+
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+  .settings-page {
+    width: 100%;
+    min-width: 0;
+    min-height: 100vh;
+
+    padding: 15px 10px 30px;
+
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .settings-page .settings-header {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 15px 5px 20px;
+
+    box-sizing: border-box;
+  }
+
+  .settings-page .settings-container {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 0;
+
+    gap: 14px;
+  }
+
+  .settings-page .setting-section {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 16px;
+
+    border-radius: 14px;
+  }
+
+  .settings-page .setting-heading {
+    margin-bottom: 10px;
+  }
+
+  .settings-page .setting-heading strong {
+    font-size: 16px;
+  }
+
+  .settings-page .setting-heading span {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .settings-page .setting-option {
+    width: 100%;
+
+    gap: 10px;
+
+    padding: 14px 0;
+  }
+
+  .settings-page .option-left {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    gap: 10px;
+  }
+
+  .settings-page .option-left > div:last-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .settings-page .option-icon {
+    width: 38px;
+    height: 38px;
+
+    min-width: 38px;
+    flex-basis: 38px;
+  }
+
+  .settings-page .option-left strong {
+    font-size: 14px;
+  }
+
+  .settings-page .option-left span {
+    font-size: 12px;
+    line-height: 1.4;
+
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  .settings-page .radio-button {
+    width: 22px;
+    height: 22px;
+
+    min-width: 22px;
+    flex-basis: 22px;
+  }
+
+  .settings-page .toggle {
+    width: 46px;
+    min-width: 46px;
+    flex-basis: 46px;
+  }
+}
+
+
+/* =========================================================
+   IPHONE / SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 450px) {
+
+  .settings-page {
+    padding: 10px 8px 30px;
+  }
+
+  .settings-page .settings-header {
+    padding: 10px 4px 16px;
+    gap: 10px;
+  }
+
+  .settings-page .settings-header h1 {
+    font-size: 24px;
+  }
+
+  .settings-page .settings-header p {
+    font-size: 12px;
+  }
+
+  .settings-page .setting-section {
+    padding: 15px;
+  }
+
+  .settings-page .setting-heading {
+    gap: 10px;
+  }
+
+  .settings-page .setting-icon {
+    width: 38px;
+    height: 38px;
+
+    min-width: 38px;
+  }
+
+  .settings-page .setting-heading strong {
+    font-size: 15px;
+  }
+
+  .settings-page .setting-heading span {
+    font-size: 12px;
+  }
+
+  .settings-page .setting-option {
+    gap: 8px;
+  }
+
+  .settings-page .option-left {
+    gap: 9px;
+  }
+
+  .settings-page .option-icon {
+    width: 36px;
+    height: 36px;
+
+    min-width: 36px;
+    flex-basis: 36px;
+  }
+
+  .settings-page .option-left strong {
+    font-size: 14px;
+  }
+
+  .settings-page .option-left span {
+    font-size: 12px;
+  }
+
+  .settings-page .toggle {
+    width: 46px;
+    min-width: 46px;
+    flex-basis: 46px;
+  }
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode .settings-page .settings-container {
+  background: transparent;
+}
+
+body.dark-mode .settings-page .setting-section {
+  background: #111827;
+  border-color: #263244;
+}
+
+body.dark-mode .settings-page .setting-option {
+  border-color: #263244;
+}
+
+body.dark-mode .settings-page .setting-heading strong,
+body.dark-mode .settings-page .option-left strong {
+  color: #f8fafc;
+}
+
+body.dark-mode .settings-page .setting-heading span,
+body.dark-mode .settings-page .option-left span {
+  color: #94a3b8;
+}
+
+body.dark-mode .settings-page .option-icon {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+body.dark-mode .settings-page .radio-button {
+  background: #1e293b;
+  border-color: #475569;
+}
 
 
 
