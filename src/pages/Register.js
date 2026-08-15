@@ -11,7 +11,7 @@ import { auth } from "../firebase/firebase";
 
 import "./Register.css";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://real-chat-5fxb.vercel.app";
 
 export default function Register() {
   const navigate = useNavigate();

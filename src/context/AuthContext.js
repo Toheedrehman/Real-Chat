@@ -9,7 +9,7 @@ import { onAuthStateChanged } from "firebase/auth";
 
 import { auth } from "../firebase/firebase";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://real-chat-5fxb.vercel.app";
 
 const AuthContext = createContext(null);
 

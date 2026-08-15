@@ -4,7 +4,7 @@ import { ArrowLeft, Camera } from "lucide-react";
 import Avatar from "../components/Avatar";
 import { useAuth } from "../context/AuthContext";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://real-chat-5fxb.vercel.app";
 
 export default function Profile() {
   const { user } = useAuth();

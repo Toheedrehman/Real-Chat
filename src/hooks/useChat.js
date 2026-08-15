@@ -4,7 +4,7 @@ import {
   useState,
 } from "react";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://real-chat-5fxb.vercel.app";
 
 // =====================================================
 // CHAT ID
