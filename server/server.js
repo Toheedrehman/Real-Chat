@@ -1,3 +1,11 @@
+const dns = require("dns");
+
+// Use public DNS for MongoDB SRV lookup
+dns.setServers([
+  "8.8.8.8",
+  "1.1.1.1",
+]);
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -29,7 +37,6 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests without origin
       if (!origin) {
         return callback(null, true);
       }
@@ -78,7 +85,7 @@ app.use(
 );
 
 // ==========================================
-// STATIC UPLOADS
+// OLD UPLOADS
 // ==========================================
 
 app.use(
@@ -89,13 +96,25 @@ app.use(
 );
 
 // ==========================================
-// TEST ROUTE
+// HEALTH CHECK
 // ==========================================
 
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
-    message: "Real Chat Node.js Server is running",
+    message:
+      "Real Chat Node.js Server is running",
+  });
+});
+
+// ==========================================
+// API TEST
+// ==========================================
+
+app.get("/api/test", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API is working",
   });
 });
 
@@ -118,7 +137,7 @@ app.use(
 );
 
 // ==========================================
-// 404 ROUTE
+// 404
 // ==========================================
 
 app.use((req, res) => {
@@ -133,18 +152,54 @@ app.use((req, res) => {
 // ERROR HANDLER
 // ==========================================
 
-app.use((err, req, res, next) => {
-  console.error("EXPRESS ERROR:", err);
+app.use(
+  (err, req, res, next) => {
+    console.error(
+      "EXPRESS ERROR:",
+      err
+    );
 
-  res.status(500).json({
-    success: false,
-    message: "Server error",
-    error: err.message,
-  });
-});
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
+);
 
 // ==========================================
-// EXPORT APP FOR VERCEL
+// START SERVER LOCALLY
+// ==========================================
+
+const PORT =
+  process.env.PORT || 5000;
+
+if (require.main === module) {
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => {
+      console.log(
+        "MongoDB connected successfully"
+      );
+
+      app.listen(PORT, () => {
+        console.log(
+          `Server running on http://localhost:${PORT}`
+        );
+      });
+    })
+    .catch((error) => {
+      console.error(
+        "MongoDB connection error:",
+        error.message
+      );
+
+      process.exit(1);
+    });
+}
+
+// ==========================================
+// VERCEL EXPORT
 // ==========================================
 
 module.exports = app;

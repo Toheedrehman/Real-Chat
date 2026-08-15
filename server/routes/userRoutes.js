@@ -1,48 +1,39 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
 const fs = require("fs");
+const { Readable } = require("stream");
 
+const cloudinary = require("../config/cloudinary");
 const User = require("../models/user");
 
 const router = express.Router();
 
 // ==========================================
-// UPLOAD DIRECTORY
+// OLD UPLOAD DIRECTORY
 // ==========================================
+//
+// Kept only for compatibility with old images
+// already stored as /uploads/... in MongoDB.
+//
+// New images are NOT saved here.
+// New images go to Cloudinary.
+//
 
-const uploadDir = path.join(
+const uploadDir = require("path").join(
   __dirname,
   "../uploads"
 );
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, {
-    recursive: true,
-  });
-}
-
 // ==========================================
 // MULTER CONFIGURATION
 // ==========================================
+//
+// IMPORTANT:
+// memoryStorage is required for Vercel.
+// We do NOT write uploaded files to disk.
+//
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-
-  filename: function (req, file, cb) {
-    const extension = path.extname(
-      file.originalname
-    );
-
-    const filename =
-      `${req.params.firebaseUid}-` +
-      `${Date.now()}${extension}`;
-
-    cb(null, filename);
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -98,7 +89,10 @@ router.post("/register", async (req, res) => {
       email,
     } = req.body;
 
-    // Validate
+    // --------------------------------------
+    // VALIDATE
+    // --------------------------------------
+
     if (!firebaseUid || !name || !email) {
       return res.status(400).json({
         success: false,
@@ -112,7 +106,10 @@ router.post("/register", async (req, res) => {
     const cleanEmail =
       email.trim().toLowerCase();
 
-    // Check UID
+    // --------------------------------------
+    // CHECK UID
+    // --------------------------------------
+
     const existingUid =
       await User.findOne({
         firebaseUid: cleanUid,
@@ -130,7 +127,10 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // Check email
+    // --------------------------------------
+    // CHECK EMAIL
+    // --------------------------------------
+
     const existingEmail =
       await User.findOne({
         email: cleanEmail,
@@ -144,7 +144,10 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // Create user
+    // --------------------------------------
+    // CREATE USER
+    // --------------------------------------
+
     const user = await User.create({
       firebaseUid: cleanUid,
       name: cleanName,
@@ -290,7 +293,7 @@ router.put(
             lastSeen: new Date(),
           },
           {
-            returnDocument: "after",
+            new: true,
             runValidators: true,
           }
         ).select("-__v");
@@ -352,7 +355,7 @@ router.put(
             name: name.trim(),
           },
           {
-            returnDocument: "after",
+            new: true,
             runValidators: true,
           }
         ).select("-__v");
@@ -394,6 +397,18 @@ router.put(
 // UPLOAD PROFILE PHOTO
 // PUT /api/users/:firebaseUid/photo
 // ==========================================
+//
+// New photos:
+// React
+//   ↓
+// Multer memory
+//   ↓
+// Cloudinary
+//   ↓
+// MongoDB
+//
+// No files are written to Vercel.
+//
 
 router.put(
   "/:firebaseUid/photo",
@@ -419,7 +434,7 @@ router.put(
       );
 
       console.log(
-        "PROFILE PHOTO UPLOAD"
+        "PROFILE PHOTO CLOUDINARY UPLOAD"
       );
 
       console.log(
@@ -428,12 +443,12 @@ router.put(
       );
 
       console.log(
-        "File:",
-        req.file.filename
+        "Original file:",
+        req.file.originalname
       );
 
       // --------------------------------------
-      // FIND USER FIRST
+      // FIND USER
       // --------------------------------------
 
       const existingUser =
@@ -442,19 +457,6 @@ router.put(
         });
 
       if (!existingUser) {
-        // Delete uploaded file because
-        // user does not exist
-        try {
-          fs.unlinkSync(
-            req.file.path
-          );
-        } catch (deleteError) {
-          console.error(
-            "Could not delete uploaded file:",
-            deleteError
-          );
-        }
-
         return res.status(404).json({
           success: false,
           message: "User not found",
@@ -466,17 +468,53 @@ router.put(
       // --------------------------------------
 
       const oldImage =
-        existingUser.profileImage;
+        existingUser.profileImage || "";
 
       // --------------------------------------
-      // NEW IMAGE URL
+      // UPLOAD BUFFER TO CLOUDINARY
       // --------------------------------------
 
       const imageURL =
-        `/uploads/${req.file.filename}`;
+        await new Promise(
+          (resolve, reject) => {
+            const uploadStream =
+              cloudinary.uploader.upload_stream(
+                {
+                  folder:
+                    "real-chat/profiles",
+
+                  public_id:
+                    firebaseUid,
+
+                  overwrite: true,
+
+                  resource_type: "image",
+                },
+
+                (error, result) => {
+                  if (error) {
+                    return reject(error);
+                  }
+
+                  resolve(
+                    result.secure_url
+                  );
+                }
+              );
+
+            Readable.from(
+              req.file.buffer
+            ).pipe(uploadStream);
+          }
+        );
+
+      console.log(
+        "Cloudinary image URL:",
+        imageURL
+      );
 
       // --------------------------------------
-      // UPDATE DATABASE
+      // UPDATE MONGODB
       // --------------------------------------
 
       const user =
@@ -488,53 +526,49 @@ router.put(
             profileImage: imageURL,
           },
           {
-            returnDocument: "after",
+            new: true,
             runValidators: true,
           }
         ).select("-__v");
 
-      // --------------------------------------
-      // DELETE OLD IMAGE
-      // --------------------------------------
-
-      if (
-        oldImage &&
-        oldImage.startsWith("/uploads/")
-      ) {
-        const oldImagePath =
-          path.join(
-            __dirname,
-            "..",
-            oldImage
-          );
-
-        if (
-          fs.existsSync(oldImagePath)
-        ) {
-          try {
-            fs.unlinkSync(
-              oldImagePath
-            );
-
-            console.log(
-              "Old profile image deleted"
-            );
-          } catch (deleteError) {
-            console.error(
-              "Old image delete error:",
-              deleteError
-            );
-          }
-        }
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
       }
 
+      // --------------------------------------
+      // IMPORTANT:
+      // DO NOT DELETE OLD /uploads IMAGES
+      // --------------------------------------
+      //
+      // This keeps existing profile pictures
+      // safe.
+      //
+      // If oldImage is:
+      //
+      // /uploads/old-photo.png
+      //
+      // we leave it alone.
+      //
+      // New image is now Cloudinary.
+      //
+      // --------------------------------------
+
       console.log(
-        "Profile image saved:",
+        "Previous image:",
+        oldImage || "None"
+      );
+
+      console.log(
+        "New profile image:",
         imageURL
       );
 
       return res.status(200).json({
         success: true,
+
         message:
           "Profile image updated successfully",
 
