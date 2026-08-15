@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
 
-import {
-  doc,
-  updateDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
 
 import { useAuth } from "../context/AuthContext";
-import { db } from "../firebase/firebase";
+
+const API_URL = "http://localhost:5000";
 
 export default function Chat() {
   const { user } = useAuth();
@@ -18,26 +13,96 @@ export default function Chat() {
   const [selectedUser, setSelectedUser] =
     useState(null);
 
-  // ONLINE STATUS
+  const [pageLoading, setPageLoading] =
+    useState(true);
+
+  // ==========================================
+  // INITIAL PAGE LOADING
+  // ==========================================
+
   useEffect(() => {
-    if (!user?.uid) return;
+    const timer = setTimeout(() => {
+      setPageLoading(false);
+    }, 700);
 
-    const userRef = doc(
-      db,
-      "users",
-      user.uid
-    );
+    return () => clearTimeout(timer);
+  }, []);
 
-    updateDoc(userRef, {
-      isOnline: true,
-      lastSeen: serverTimestamp(),
-    }).catch(console.error);
+  // ==========================================
+  // ONLINE STATUS
+  // ==========================================
+
+  useEffect(() => {
+    if (!user?.uid) {
+      return;
+    }
+
+    const updateOnlineStatus = async (
+      isOnline
+    ) => {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/users/${user.uid}/status`,
+          {
+            method: "PUT",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              isOnline,
+            }),
+          }
+        );
+
+        const data =
+          await response.json();
+
+        console.log(
+          `Online status (${isOnline}):`,
+          response.status,
+          data
+        );
+      } catch (error) {
+        console.error(
+          "Online status error:",
+          error
+        );
+      }
+    };
+
+    // USER ONLINE
+    updateOnlineStatus(true);
+
+    // ========================================
+    // USER LEAVES PAGE
+    // ========================================
 
     const handleBeforeUnload = () => {
-      updateDoc(userRef, {
-        isOnline: false,
-        lastSeen: serverTimestamp(),
-      }).catch(() => {});
+      fetch(
+        `${API_URL}/api/users/${user.uid}/status`,
+        {
+          method: "PUT",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            isOnline: false,
+          }),
+
+          keepalive: true,
+        }
+      ).catch((error) => {
+        console.error(
+          "Offline status error:",
+          error
+        );
+      });
     };
 
     window.addEventListener(
@@ -50,26 +115,78 @@ export default function Chat() {
         "beforeunload",
         handleBeforeUnload
       );
-
-      updateDoc(userRef, {
-        isOnline: false,
-        lastSeen: serverTimestamp(),
-      }).catch(() => {});
     };
   }, [user?.uid]);
 
+  // ==========================================
+  // RENDER
+  // ==========================================
+
   return (
-    <div className="chat-app">
+    <div className="chat-page-wrapper">
 
-      <Sidebar
-        selectedUser={selectedUser}
-        onSelectUser={setSelectedUser}
-      />
+      {/* ======================================
+          CHAT APP
+      ====================================== */}
 
-      <ChatWindow
-        currentUid={user?.uid}
-        selectedUser={selectedUser}
-      />
+      <div
+        className={`chat-app ${
+          pageLoading
+            ? "chat-blurred"
+            : ""
+        } ${
+          selectedUser
+            ? "chat-selected"
+            : "chat-not-selected"
+        }`}
+      >
+
+        {/* ====================================
+            SIDEBAR
+        ==================================== */}
+
+        <aside className="chat-sidebar">
+          <Sidebar
+            selectedUser={selectedUser}
+            onSelectUser={setSelectedUser}
+          />
+        </aside>
+
+        {/* ====================================
+            CHAT WINDOW
+        ==================================== */}
+
+        <section className="chat-main">
+          <ChatWindow
+            currentUid={user?.uid}
+            selectedUser={selectedUser}
+            onBack={() =>
+              setSelectedUser(null)
+            }
+          />
+        </section>
+
+      </div>
+
+      {/* ======================================
+          LOADING OVERLAY
+      ====================================== */}
+
+      {pageLoading && (
+        <div className="chat-loading-overlay">
+
+          <div className="chat-loader">
+
+            <div className="loader-spinner"></div>
+
+            <p>
+              Loading chat...
+            </p>
+
+          </div>
+
+        </div>
+      )}
 
     </div>
   );

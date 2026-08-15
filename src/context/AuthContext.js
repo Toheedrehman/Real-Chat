@@ -1,54 +1,218 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../firebase/firebase";
+
+import { auth } from "../firebase/firebase";
+
+const API_URL = "http://localhost:5000";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [mongoUser, setMongoUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let unsubscribeProfile = null;
+  // ==========================================
+  // LOAD / CREATE MONGODB PROFILE
+  // ==========================================
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+  const loadMongoProfile = async (firebaseUser) => {
+    if (!firebaseUser?.uid) {
+      setMongoUser(null);
+      return;
+    }
 
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-        unsubscribeProfile = null;
-      }
+    try {
+      console.log(
+        "Loading MongoDB profile:",
+        firebaseUser.uid
+      );
 
-      if (!currentUser) {
-        setProfile(null);
-        setLoading(false);
+      const response = await fetch(
+        `${API_URL}/api/users/${firebaseUser.uid}`
+      );
+
+      const data = await response.json();
+
+      console.log(
+        "MongoDB profile response:",
+        data
+      );
+
+      // ========================================
+      // PROFILE FOUND
+      // ========================================
+
+      if (response.ok && data.user) {
+        console.log(
+          "MongoDB profile found:",
+          data.user
+        );
+
+        setMongoUser(data.user);
+
         return;
       }
 
-      unsubscribeProfile = onSnapshot(
-        doc(db, "users", currentUser.uid),
-        (snapshot) => {
-          setProfile(snapshot.exists() ? snapshot.data() : null);
-          setLoading(false);
-        },
-        () => setLoading(false)
-      );
-    });
+      // ========================================
+      // PROFILE DOES NOT EXIST
+      // CREATE PROFILE
+      // ========================================
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeProfile) unsubscribeProfile();
-    };
+      if (response.status === 404) {
+        console.log(
+          "MongoDB profile does not exist. Creating..."
+        );
+
+        const registerResponse = await fetch(
+          `${API_URL}/api/users/register`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+            },
+
+            body: JSON.stringify({
+              firebaseUid: firebaseUser.uid,
+
+              name:
+                firebaseUser.displayName ||
+                firebaseUser.email?.split("@")[0] ||
+                "User",
+
+              email:
+                firebaseUser.email || "",
+            }),
+          }
+        );
+
+        const registerData =
+          await registerResponse.json();
+
+        console.log(
+          "MongoDB registration response:",
+          registerData
+        );
+
+        if (!registerResponse.ok) {
+          throw new Error(
+            registerData.message ||
+              "Could not create MongoDB profile"
+          );
+        }
+
+        setMongoUser(
+          registerData.user || null
+        );
+
+        return;
+      }
+
+      throw new Error(
+        data.message ||
+          "Could not load MongoDB profile"
+      );
+    } catch (error) {
+      console.error(
+        "MongoDB profile error:",
+        error
+      );
+
+      setMongoUser(null);
+    }
+  };
+
+  // ==========================================
+  // UPDATE MONGODB USER IN CONTEXT
+  // ==========================================
+
+  const updateMongoUser = (updatedUser) => {
+    console.log(
+      "Updating MongoDB user in AuthContext:",
+      updatedUser
+    );
+
+    setMongoUser(updatedUser);
+  };
+
+  // ==========================================
+  // FIREBASE AUTH LISTENER
+  // ==========================================
+
+  useEffect(() => {
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (firebaseUser) => {
+          console.log(
+            "Firebase auth changed:",
+            firebaseUser?.uid || null
+          );
+
+          setUser(firebaseUser);
+
+          if (firebaseUser) {
+            await loadMongoProfile(
+              firebaseUser
+            );
+          } else {
+            setMongoUser(null);
+          }
+
+          setLoading(false);
+        }
+      );
+
+    return () => unsubscribe();
   }, []);
 
+  // ==========================================
+  // LOGOUT
+  // ==========================================
+
+  const logout = async () => {
+    try {
+      await auth.signOut();
+
+      setUser(null);
+      setMongoUser(null);
+    } catch (error) {
+      console.error(
+        "Logout error:",
+        error
+      );
+    }
+  };
+
+  // ==========================================
+  // CONTEXT PROVIDER
+  // ==========================================
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        mongoUser,
+        loading,
+        logout,
+        updateMongoUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
+
+// ==========================================
+// useAuth
+// ==========================================
 
 export function useAuth() {
   return useContext(AuthContext);

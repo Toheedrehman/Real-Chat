@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-} from "firebase/firestore";
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-import { db } from "../firebase/firebase";
+const API_URL = "http://localhost:5000";
 
 export function useUsers(currentUid) {
   const [users, setUsers] = useState([]);
@@ -19,38 +17,51 @@ export function useUsers(currentUid) {
       return;
     }
 
-    const usersRef = collection(db, "users");
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
 
-    const q = query(
-      usersRef,
-      orderBy("name")
-    );
+        console.log(
+          "Fetching users:",
+          currentUid
+        );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs
-          .map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }))
-          .filter(
-            (item) => item.id !== currentUid
+        const response = await fetch(
+          `${API_URL}/api/users?currentUid=${encodeURIComponent(
+            currentUid
+          )}`
+        );
+
+        const data = await response.json();
+
+        console.log(
+          "Users response:",
+          data
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            data.message ||
+              "Failed to fetch users"
           );
+        }
 
-        setUsers(data);
-        setLoading(false);
-      },
-      (error) => {
+        setUsers(
+          data.users || []
+        );
+      } catch (error) {
         console.error(
           "Users error:",
           error
         );
+
+        setUsers([]);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    fetchUsers();
   }, [currentUid]);
 
   return {
@@ -59,11 +70,13 @@ export function useUsers(currentUid) {
   };
 }
 
-export function useUserSearch(users, search) {
+export function useUserSearch(
+  users,
+  search
+) {
   return useMemo(() => {
-    const value = search
-      .trim()
-      .toLowerCase();
+    const value =
+      search.trim().toLowerCase();
 
     if (!value) {
       return users;

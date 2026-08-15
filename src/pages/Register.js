@@ -1,127 +1,374 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+
 import { MessageCircle } from "lucide-react";
-import { auth, db } from "../firebase/firebase";
+
+import { auth } from "../firebase/firebase";
+
+import "./Register.css";
+
+const API_URL = "http://localhost:5000";
 
 export default function Register() {
   const navigate = useNavigate();
+
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
-    confirmPassword: "",
   });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  // ==========================================
+  // INPUT CHANGE
+  // ==========================================
+
+  const handleChange = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  // ==========================================
+  // REGISTER
+  // ==========================================
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
     setError("");
 
-    if (!form.name || !form.email || !form.password) {
-      setError("Please fill in all fields.");
+    if (!form.name.trim()) {
+      setError("Please enter your name.");
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setError("Please enter your email.");
       return;
     }
 
     if (form.password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
+      setError(
+        "Password must be at least 6 characters."
+      );
       return;
     }
 
     try {
       setLoading(true);
 
-      const result = await createUserWithEmailAndPassword(
-        auth,
-        form.email,
-        form.password
+      // ========================================
+      // CREATE FIREBASE USER
+      // ========================================
+
+      const credential =
+        await createUserWithEmailAndPassword(
+          auth,
+          form.email.trim(),
+          form.password
+        );
+
+      const firebaseUser =
+        credential.user;
+
+      // ========================================
+      // UPDATE FIREBASE DISPLAY NAME
+      // ========================================
+
+      await updateProfile(
+        firebaseUser,
+        {
+          displayName:
+            form.name.trim(),
+        }
       );
 
-      await setDoc(doc(db, "users", result.user.uid), {
-        uid: result.user.uid,
-        name: form.name.trim(),
-        email: form.email.toLowerCase(),
-        photoURL: "",
-        isOnline: true,
-        lastSeen: Date.now(),
-        createdAt: serverTimestamp(),
-      });
+      // ========================================
+      // CREATE MONGODB PROFILE
+      // ========================================
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/users/register`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              firebaseUid:
+                firebaseUser.uid,
+
+              name:
+                form.name.trim(),
+
+              email:
+                form.email.trim(),
+            }),
+          }
+        );
+
+        const data =
+          await response.json();
+
+        console.log(
+          "MongoDB registration:",
+          data
+        );
+
+        if (!response.ok) {
+          console.error(
+            "MongoDB registration failed:",
+            data
+          );
+        }
+      } catch (mongoError) {
+        console.error(
+          "MongoDB registration error:",
+          mongoError
+        );
+      }
+
+      // ========================================
+      // GO TO CHAT
+      // ========================================
 
       navigate("/chat");
-    } catch (err) {
-      const messages = {
-        "auth/email-already-in-use": "This email is already registered.",
-        "auth/invalid-email": "Please enter a valid email address.",
-        "auth/weak-password": "Password is too weak.",
-      };
-      setError(messages[err.code] || err.message);
+
+    } catch (error) {
+      console.error(
+        "Registration error:",
+        error
+      );
+
+      if (
+        error.code ===
+        "auth/email-already-in-use"
+      ) {
+        setError(
+          "This email is already registered."
+        );
+      } else if (
+        error.code ===
+        "auth/invalid-email"
+      ) {
+        setError(
+          "Please enter a valid email address."
+        );
+      } else if (
+        error.code ===
+        "auth/weak-password"
+      ) {
+        setError(
+          "Password is too weak."
+        );
+      } else {
+        setError(
+          error.message ||
+            "Registration failed."
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================================
+  // UI
+  // ==========================================
+
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <MessageCircle size={28} />
+    <div className="register-page">
+
+      {/* ======================================
+          LEFT / BRAND SECTION
+      ====================================== */}
+
+      <div className="register-brand">
+
+        <div className="brand-content">
+
+          <div className="brand-logo">
+            <MessageCircle
+              size={30}
+              strokeWidth={2.5}
+            />
+          </div>
+
+          <h1>
+            ChatApp
+          </h1>
+
+          <p>
+            Connect, chat and stay
+            connected with your friends.
+          </p>
+
+          <div className="brand-decoration">
+            <span />
+            <span />
+            <span />
+          </div>
+
         </div>
-        <h1>Create account</h1>
-        <p className="auth-subtitle">Join ChatApp and start messaging.</p>
 
-        {error && <div className="error-box">{error}</div>}
-
-        <form onSubmit={submit} className="auth-form">
-          <label>Full name</label>
-          <input
-            type="text"
-            placeholder="Toheed Rehman"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-
-          <label>Email</label>
-          <input
-            type="email"
-            placeholder="you@example.com"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-          />
-
-          <label>Password</label>
-          <input
-            type="password"
-            placeholder="At least 6 characters"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-          />
-
-          <label>Confirm password</label>
-          <input
-            type="password"
-            placeholder="Repeat your password"
-            value={form.confirmPassword}
-            onChange={(e) =>
-              setForm({ ...form, confirmPassword: e.target.value })
-            }
-          />
-
-          <button className="primary-button" disabled={loading}>
-            {loading ? "Creating account..." : "Create account"}
-          </button>
-        </form>
-
-        <p className="auth-footer">
-          Already have an account? <Link to="/login">Sign in</Link>
-        </p>
       </div>
+
+      {/* ======================================
+          REGISTER FORM
+      ====================================== */}
+
+      <div className="register-container">
+
+        <div className="register-card">
+
+          <div className="register-header">
+
+            <div className="mobile-logo">
+              <MessageCircle
+                size={25}
+              />
+            </div>
+
+            <h2>
+              Create Account
+            </h2>
+
+            <p>
+              Register to start chatting
+            </p>
+
+          </div>
+
+          {/* ERROR */}
+
+          {error && (
+            <div className="register-error">
+              {error}
+            </div>
+          )}
+
+          {/* FORM */}
+
+          <form
+            onSubmit={handleSubmit}
+            className="register-form"
+          >
+
+            {/* NAME */}
+
+            <div className="form-group">
+
+              <label htmlFor="name">
+                Name
+              </label>
+
+              <input
+                id="name"
+                name="name"
+                type="text"
+                value={form.name}
+                onChange={handleChange}
+                placeholder="Enter your name"
+                autoComplete="name"
+                disabled={loading}
+              />
+
+            </div>
+
+            {/* EMAIL */}
+
+            <div className="form-group">
+
+              <label htmlFor="email">
+                Email
+              </label>
+
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="Enter your email"
+                autoComplete="email"
+                disabled={loading}
+              />
+
+            </div>
+
+            {/* PASSWORD */}
+
+            <div className="form-group">
+
+              <label htmlFor="password">
+                Password
+              </label>
+
+              <input
+                id="password"
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                autoComplete="new-password"
+                disabled={loading}
+              />
+
+            </div>
+
+            {/* BUTTON */}
+
+            <button
+              type="submit"
+              className="register-button"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="button-spinner" />
+                  Creating Account...
+                </>
+              ) : (
+                "Create Account"
+              )}
+            </button>
+
+          </form>
+
+          {/* LOGIN */}
+
+          <div className="login-link">
+
+            <span>
+              Already have an account?
+            </span>
+
+            <Link to="/login">
+              Login
+            </Link>
+
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
   );
 }

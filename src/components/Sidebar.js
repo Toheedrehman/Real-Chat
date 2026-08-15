@@ -6,32 +6,19 @@ import {
   Settings,
 } from "lucide-react";
 
-import {
-  signOut,
-} from "firebase/auth";
-
-import {
-  useNavigate,
-} from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 import Avatar from "./Avatar";
 
-import {
-  auth,
-} from "../firebase/firebase";
-
-import {
-  useAuth,
-} from "../context/AuthContext";
+import { auth } from "../firebase/firebase";
+import { useAuth } from "../context/AuthContext";
 
 import {
   useUserSearch,
   useUsers,
 } from "../hooks/useUsers";
-
-import {
-  useState,
-} from "react";
 
 export default function Sidebar({
   selectedUser,
@@ -39,7 +26,7 @@ export default function Sidebar({
 }) {
   const {
     user,
-    profile,
+    mongoUser,
   } = useAuth();
 
   const {
@@ -47,9 +34,14 @@ export default function Sidebar({
     loading,
   } = useUsers(user?.uid);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] =
+    useState("");
 
   const navigate = useNavigate();
+
+  // ==========================================
+  // SEARCH USERS
+  // ==========================================
 
   const filteredUsers =
     useUserSearch(
@@ -57,25 +49,54 @@ export default function Sidebar({
       search
     );
 
-  const current =
-    profile || {
-      name:
-        user?.displayName ||
-        user?.email,
-      email: user?.email,
-      photoURL:
-        user?.photoURL || "",
-    };
+  // ==========================================
+  // CURRENT USER
+  // ==========================================
+
+  const current = mongoUser || {
+    name:
+      user?.displayName ||
+      user?.email ||
+      "User",
+
+    email:
+      user?.email || "",
+
+    photoURL:
+      user?.photoURL || "",
+
+    profileImage:
+      "",
+  };
+
+  // ==========================================
+  // LOGOUT
+  // ==========================================
 
   const logout = async () => {
-    await signOut(auth);
-    navigate("/login");
+    try {
+      await signOut(auth);
+
+      navigate("/login");
+    } catch (error) {
+      console.error(
+        "Logout error:",
+        error
+      );
+    }
   };
+
+  // ==========================================
+  // RENDER
+  // ==========================================
 
   return (
     <aside className="sidebar">
 
-      {/* HEADER */}
+      {/* ======================================
+          HEADER
+      ====================================== */}
+
       <div className="sidebar-top">
 
         <div className="brand">
@@ -97,9 +118,11 @@ export default function Sidebar({
         </div>
 
         {/* PROFILE + SETTINGS */}
+
         <div className="sidebar-actions">
 
           <button
+            type="button"
             className="icon-button"
             title="Profile"
             onClick={() =>
@@ -110,6 +133,7 @@ export default function Sidebar({
           </button>
 
           <button
+            type="button"
             className="icon-button"
             title="Settings"
             onClick={() =>
@@ -123,8 +147,10 @@ export default function Sidebar({
 
       </div>
 
+      {/* ======================================
+          CURRENT USER
+      ====================================== */}
 
-      {/* CURRENT USER */}
       <div className="current-user">
 
         <div className="avatar-wrap">
@@ -150,13 +176,16 @@ export default function Sidebar({
 
       </div>
 
+      {/* ======================================
+          SEARCH
+      ====================================== */}
 
-      {/* SEARCH */}
       <div className="search-box">
 
         <Search size={18} />
 
         <input
+          type="text"
           value={search}
           onChange={(e) =>
             setSearch(e.target.value)
@@ -166,13 +195,18 @@ export default function Sidebar({
 
       </div>
 
+      {/* ======================================
+          FRIENDS TITLE
+      ====================================== */}
 
       <div className="section-title">
         FRIENDS
       </div>
 
+      {/* ======================================
+          FRIEND LIST
+      ====================================== */}
 
-      {/* FRIEND LIST */}
       <div className="user-list">
 
         {loading ? (
@@ -189,73 +223,91 @@ export default function Sidebar({
 
         ) : (
 
-          filteredUsers.map((item) => (
+          filteredUsers.map((item) => {
 
-            <button
-              key={item.id}
-              className={`user-item ${
-                selectedUser?.id === item.id
-                  ? "selected"
-                  : ""
-              }`}
-              onClick={() =>
-                onSelectUser(item)
-              }
-            >
+            const userId =
+              item.firebaseUid ||
+              item._id;
 
-              <div className="avatar-wrap">
+            const isSelected =
+              selectedUser?.firebaseUid ===
+              item.firebaseUid;
 
-                <Avatar user={item} />
+            return (
+              <button
+                key={userId}
+                type="button"
+                className={`user-item ${
+                  isSelected
+                    ? "selected"
+                    : ""
+                }`}
+                onClick={() =>
+                  onSelectUser(item)
+                }
+              >
 
-                {item.isOnline && (
-                  <span className="status-dot" />
-                )}
+                {/* AVATAR */}
 
-              </div>
+                <div className="avatar-wrap">
 
+                  <Avatar user={item} />
 
-              <div className="user-item-content">
-
-                <div className="user-item-row">
-
-                  <strong>
-                    {item.name || "User"}
-                  </strong>
-
-                  <small>
-                    {item.isOnline
-                      ? "Online"
-                      : "Offline"}
-                  </small>
+                  {item.isOnline && (
+                    <span className="status-dot" />
+                  )}
 
                 </div>
 
+                {/* USER INFORMATION */}
 
-                <span>
+                <div className="user-item-content">
 
-                  {item.isOnline
-                    ? "Active now"
-                    : item.lastSeen
-                    ? `Last seen ${new Date(
-                        item.lastSeen.seconds * 1000
-                      ).toLocaleString()}`
-                    : item.email}
+                  <div className="user-item-row">
 
-                </span>
+                    <strong>
+                      {item.name ||
+                        "User"}
+                    </strong>
 
-              </div>
+                    <small>
+                      {item.isOnline
+                        ? "Online"
+                        : "Offline"}
+                    </small>
 
-            </button>
+                  </div>
 
-          ))
+                  <span>
+
+                    {item.isOnline ? (
+                      "Active now"
+                    ) : item.lastSeen ? (
+                      `Last seen ${formatLastSeen(
+                        item.lastSeen
+                      )}`
+                    ) : (
+                      item.email
+                    )}
+
+                  </span>
+
+                </div>
+
+              </button>
+            );
+          })
 
         )}
 
       </div>
 
+      {/* ======================================
+          LOGOUT
+      ====================================== */}
 
-      {/* LOGOUT */}
       <button
+        type="button"
         className="logout-button"
         onClick={logout}
       >
@@ -265,4 +317,54 @@ export default function Sidebar({
 
     </aside>
   );
+}
+
+// ==========================================
+// LAST SEEN FORMATTER
+// ==========================================
+
+function formatLastSeen(lastSeen) {
+  try {
+    let date;
+
+    // MongoDB Date / ISO string
+    if (
+      typeof lastSeen === "string" ||
+      lastSeen instanceof Date
+    ) {
+      date = new Date(lastSeen);
+    }
+
+    // Firestore timestamp
+    else if (
+      lastSeen?.seconds
+    ) {
+      date = new Date(
+        lastSeen.seconds * 1000
+      );
+    }
+
+    // MongoDB serialized object
+    else if (
+      lastSeen?.$date
+    ) {
+      date = new Date(
+        lastSeen.$date
+      );
+    }
+
+    if (
+      !date ||
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return "recently";
+    }
+
+    return date.toLocaleString();
+
+  } catch (error) {
+    return "recently";
+  }
 }
