@@ -5,24 +5,39 @@ import {
   useState,
 } from "react";
 
-import { onAuthStateChanged } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut,
+} from "firebase/auth";
 
 import { auth } from "../firebase/firebase";
+import socket from "../socket";
 
-const API_URL = "https://real-chat-5fxb.vercel.app";
+const API_URL =
+  "https://real-chat-5fxb.vercel.app";
 
-const AuthContext = createContext(null);
+const AuthContext =
+  createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [mongoUser, setMongoUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({
+  children,
+}) {
+  const [user, setUser] =
+    useState(null);
 
-  // ==========================================
+  const [mongoUser, setMongoUser] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  // =====================================================
   // LOAD / CREATE MONGODB PROFILE
-  // ==========================================
+  // =====================================================
 
-  const loadMongoProfile = async (firebaseUser) => {
+  const loadMongoProfile = async (
+    firebaseUser
+  ) => {
     if (!firebaseUser?.uid) {
       setMongoUser(null);
       return;
@@ -34,22 +49,31 @@ export function AuthProvider({ children }) {
         firebaseUser.uid
       );
 
+      // ================================================
+      // GET PROFILE
+      // ================================================
+
       const response = await fetch(
         `${API_URL}/api/users/${firebaseUser.uid}`
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       console.log(
         "MongoDB profile response:",
         data
       );
 
-      // ========================================
+      // ================================================
       // PROFILE FOUND
-      // ========================================
+      // ================================================
 
-      if (response.ok && data.user) {
+      if (
+        response.ok &&
+        data.success &&
+        data.user
+      ) {
         console.log(
           "MongoDB profile found:",
           data.user
@@ -57,41 +81,45 @@ export function AuthProvider({ children }) {
 
         setMongoUser(data.user);
 
-        return;
+        return data.user;
       }
 
-      // ========================================
+      // ================================================
       // PROFILE DOES NOT EXIST
-      // CREATE PROFILE
-      // ========================================
+      // ================================================
 
       if (response.status === 404) {
         console.log(
           "MongoDB profile does not exist. Creating..."
         );
 
-        const registerResponse = await fetch(
-          `${API_URL}/api/users/register`,
-          {
-            method: "POST",
+        const registerResponse =
+          await fetch(
+            `${API_URL}/api/users/register`,
+            {
+              method: "POST",
 
-            headers: {
-              "Content-Type": "application/json",
-            },
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
 
-            body: JSON.stringify({
-              firebaseUid: firebaseUser.uid,
+              body: JSON.stringify({
+                firebaseUid:
+                  firebaseUser.uid,
 
-              name:
-                firebaseUser.displayName ||
-                firebaseUser.email?.split("@")[0] ||
-                "User",
+                name:
+                  firebaseUser.displayName ||
+                  firebaseUser.email?.split(
+                    "@"
+                  )[0] ||
+                  "User",
 
-              email:
-                firebaseUser.email || "",
-            }),
-          }
-        );
+                email:
+                  firebaseUser.email || "",
+              }),
+            }
+          );
 
         const registerData =
           await registerResponse.json();
@@ -101,24 +129,34 @@ export function AuthProvider({ children }) {
           registerData
         );
 
-        if (!registerResponse.ok) {
-          throw new Error(
-            registerData.message ||
-              "Could not create MongoDB profile"
+        if (
+          registerResponse.ok &&
+          registerData.success &&
+          registerData.user
+        ) {
+          console.log(
+            "MongoDB profile created/linked:",
+            registerData.user
           );
+
+          setMongoUser(
+            registerData.user
+          );
+
+          return registerData.user;
         }
 
-        setMongoUser(
-          registerData.user || null
+        throw new Error(
+          registerData.message ||
+            "Could not create MongoDB profile"
         );
-
-        return;
       }
 
       throw new Error(
         data.message ||
           "Could not load MongoDB profile"
       );
+
     } catch (error) {
       console.error(
         "MongoDB profile error:",
@@ -126,14 +164,18 @@ export function AuthProvider({ children }) {
       );
 
       setMongoUser(null);
+
+      return null;
     }
   };
 
-  // ==========================================
-  // UPDATE MONGODB USER IN CONTEXT
-  // ==========================================
+  // =====================================================
+  // UPDATE MONGODB USER
+  // =====================================================
 
-  const updateMongoUser = (updatedUser) => {
+  const updateMongoUser = (
+    updatedUser
+  ) => {
     console.log(
       "Updating MongoDB user in AuthContext:",
       updatedUser
@@ -142,11 +184,13 @@ export function AuthProvider({ children }) {
     setMongoUser(updatedUser);
   };
 
-  // ==========================================
-  // FIREBASE AUTH LISTENER
-  // ==========================================
+  // =====================================================
+  // FIREBASE AUTH + SOCKET.IO
+  // =====================================================
 
   useEffect(() => {
+    let mounted = true;
+
     const unsubscribe =
       onAuthStateChanged(
         auth,
@@ -156,33 +200,111 @@ export function AuthProvider({ children }) {
             firebaseUser?.uid || null
           );
 
-          setUser(firebaseUser);
+          // ============================================
+          // LOGGED OUT
+          // ============================================
 
-          if (firebaseUser) {
-            await loadMongoProfile(
-              firebaseUser
-            );
-          } else {
-            setMongoUser(null);
+          if (!firebaseUser) {
+            if (socket.connected) {
+              socket.emit(
+                "userOffline"
+              );
+
+              socket.disconnect();
+            }
+
+            if (mounted) {
+              setUser(null);
+              setMongoUser(null);
+              setLoading(false);
+            }
+
+            return;
           }
 
-          setLoading(false);
+          // ============================================
+          // LOGGED IN
+          // ============================================
+
+          if (mounted) {
+            setUser(firebaseUser);
+            setLoading(true);
+          }
+
+          // ============================================
+          // MONGODB PROFILE
+          // ============================================
+
+          await loadMongoProfile(
+            firebaseUser
+          );
+
+          // ============================================
+          // SOCKET.IO
+          // ============================================
+
+          if (!socket.connected) {
+            socket.connect();
+          }
+
+          socket.emit(
+            "userOnline",
+            firebaseUser.uid
+          );
+
+          console.log(
+            "Socket.IO connected for user:",
+            firebaseUser.uid
+          );
+
+          // ============================================
+          // FINISH LOADING
+          // ============================================
+
+          if (mounted) {
+            setLoading(false);
+          }
         }
       );
 
-    return () => unsubscribe();
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
-  // ==========================================
+  // =====================================================
   // LOGOUT
-  // ==========================================
+  // =====================================================
 
   const logout = async () => {
     try {
-      await auth.signOut();
+      console.log(
+        "Logging out..."
+      );
 
-      setUser(null);
-      setMongoUser(null);
+      // ==========================================
+      // SOCKET OFFLINE
+      // ==========================================
+
+      if (socket.connected) {
+        socket.emit(
+          "userOffline"
+        );
+
+        socket.disconnect();
+      }
+
+      // ==========================================
+      // FIREBASE LOGOUT
+      // ==========================================
+
+      await signOut(auth);
+
+      console.log(
+        "Logout successful"
+      );
+
     } catch (error) {
       console.error(
         "Logout error:",
@@ -191,9 +313,9 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // ==========================================
-  // CONTEXT PROVIDER
-  // ==========================================
+  // =====================================================
+  // PROVIDER
+  // =====================================================
 
   return (
     <AuthContext.Provider
@@ -210,10 +332,12 @@ export function AuthProvider({ children }) {
   );
 }
 
-// ==========================================
+// =====================================================
 // useAuth
-// ==========================================
+// =====================================================
 
 export function useAuth() {
-  return useContext(AuthContext);
+  return useContext(
+    AuthContext
+  );
 }

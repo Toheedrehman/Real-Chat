@@ -4,7 +4,10 @@ import {
   useState,
 } from "react";
 
-const API_URL = "https://real-chat-5fxb.vercel.app";
+import socket from "../socket";
+
+const API_URL =
+  "https://real-chat-5fxb.vercel.app";
 
 // =====================================================
 // CHAT ID
@@ -24,9 +27,14 @@ export function useChat(
   currentUid,
   selectedUser
 ) {
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [messages, setMessages] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [sending, setSending] =
+    useState(false);
 
   // =====================================================
   // OTHER USER
@@ -43,61 +51,11 @@ export function useChat(
 
   const chatId =
     currentUid && otherUid
-      ? getChatId(currentUid, otherUid)
+      ? getChatId(
+          currentUid,
+          otherUid
+        )
       : null;
-
-  // =====================================================
-  // GET MESSAGES
-  // =====================================================
-
-  const fetchMessages = useCallback(async () => {
-    if (!chatId) {
-      setMessages([]);
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const response = await fetch(
-        `${API_URL}/api/messages/${chatId}`
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            data.message ||
-            `Server error: ${response.status}`
-        );
-      }
-
-      setMessages(data.messages || []);
-    } catch (error) {
-      console.error(
-        "Message loading error:",
-        error
-      );
-
-      setMessages([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [chatId]);
-
-  // =====================================================
-  // LOAD ONLY WHEN CHAT CHANGES
-  // =====================================================
-
-  useEffect(() => {
-    if (!chatId) {
-      setMessages([]);
-      return;
-    }
-
-    fetchMessages();
-  }, [chatId, fetchMessages]);
 
   // =====================================================
   // ADD MESSAGE
@@ -114,8 +72,8 @@ export function useChat(
           newMessage._id ||
           newMessage.id;
 
-        const exists = previous.some(
-          (message) => {
+        const exists =
+          previous.some((message) => {
             const messageId =
               message._id ||
               message.id;
@@ -125,8 +83,7 @@ export function useChat(
               newId &&
               messageId === newId
             );
-          }
-        );
+          });
 
         if (exists) {
           return previous;
@@ -142,49 +99,23 @@ export function useChat(
   );
 
   // =====================================================
-  // SEND TEXT
+  // GET MESSAGES
   // =====================================================
 
-  const sendMessage = useCallback(
-    async (text) => {
-      if (
-        !currentUid ||
-        !otherUid ||
-        !chatId ||
-        !text ||
-        !text.trim()
-      ) {
+  const fetchMessages =
+    useCallback(async () => {
+      if (!chatId) {
+        setMessages([]);
         return;
       }
 
       try {
-        setSending(true);
+        setLoading(true);
 
-        const response = await fetch(
-          `${API_URL}/api/messages`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              chatId,
-
-              senderId:
-                currentUid,
-
-              receiverId:
-                otherUid,
-
-              text: text.trim(),
-
-              type: "text",
-            }),
-          }
-        );
+        const response =
+          await fetch(
+            `${API_URL}/api/messages/${chatId}`
+          );
 
         const data =
           await response.json();
@@ -197,436 +128,587 @@ export function useChat(
           );
         }
 
-        addMessage(data.message);
+        setMessages(
+          data.messages || []
+        );
+
       } catch (error) {
         console.error(
-          "Send message error:",
+          "Message loading error:",
           error
         );
 
-        alert(
-          `Message could not be sent: ${error.message}`
-        );
+        setMessages([]);
+
       } finally {
-        setSending(false);
+        setLoading(false);
       }
-    },
-    [
-      currentUid,
-      otherUid,
-      chatId,
-      addMessage,
-    ]
-  );
+    }, [chatId]);
+
+  // =====================================================
+  // LOAD OLD MESSAGES
+  // =====================================================
+
+  useEffect(() => {
+    if (!chatId) {
+      setMessages([]);
+      return;
+    }
+
+    fetchMessages();
+  }, [
+    chatId,
+    fetchMessages,
+  ]);
+
+  // =====================================================
+  // SOCKET: JOIN CHAT
+  // =====================================================
+
+  useEffect(() => {
+    if (!chatId) {
+      return;
+    }
+
+    // Make sure socket is connected
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    // Join current chat room
+    socket.emit(
+      "joinChat",
+      chatId
+    );
+
+    console.log(
+      "Joined chat room:",
+      chatId
+    );
+
+    return () => {
+      socket.emit(
+        "leaveChat",
+        chatId
+      );
+
+      console.log(
+        "Left chat room:",
+        chatId
+      );
+    };
+  }, [chatId]);
+
+  // =====================================================
+  // SOCKET: NEW MESSAGE
+  // =====================================================
+
+  useEffect(() => {
+    if (!chatId) {
+      return;
+    }
+
+    const handleNewMessage =
+      (newMessage) => {
+        if (!newMessage) {
+          return;
+        }
+
+        // Only add message belonging
+        // to current chat
+        if (
+          newMessage.chatId !==
+          chatId
+        ) {
+          return;
+        }
+
+        console.log(
+          "Socket new message:",
+          newMessage
+        );
+
+        addMessage(
+          newMessage
+        );
+      };
+
+    socket.on(
+      "newMessage",
+      handleNewMessage
+    );
+
+    return () => {
+      socket.off(
+        "newMessage",
+        handleNewMessage
+      );
+    };
+  }, [
+    chatId,
+    addMessage,
+  ]);
+
+  // =====================================================
+  // SEND TEXT
+  // =====================================================
+
+  const sendMessage =
+    useCallback(
+      async (text) => {
+        if (
+          !currentUid ||
+          !otherUid ||
+          !chatId ||
+          !text ||
+          !text.trim()
+        ) {
+          return;
+        }
+
+        try {
+          setSending(true);
+
+          const response =
+            await fetch(
+              `${API_URL}/api/messages`,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+
+                body: JSON.stringify({
+                  chatId,
+
+                  senderId:
+                    currentUid,
+
+                  receiverId:
+                    otherUid,
+
+                  text:
+                    text.trim(),
+
+                  type: "text",
+                }),
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                data.message ||
+                `Server error: ${response.status}`
+            );
+          }
+
+          /*
+           * Add locally.
+           *
+           * addMessage() prevents a duplicate
+           * if Socket.IO also sends the same
+           * message back.
+           */
+
+          addMessage(
+            data.message
+          );
+
+        } catch (error) {
+          console.error(
+            "Send message error:",
+            error
+          );
+
+          alert(
+            `Message could not be sent: ${error.message}`
+          );
+
+        } finally {
+          setSending(false);
+        }
+      },
+      [
+        currentUid,
+        otherUid,
+        chatId,
+        addMessage,
+      ]
+    );
 
   // =====================================================
   // SEND IMAGE
   // =====================================================
 
-  const sendImage = useCallback(
-    async (file) => {
-      if (
-        !currentUid ||
-        !otherUid ||
-        !chatId ||
-        !file
-      ) {
-        return;
-      }
+  const sendImage =
+    useCallback(
+      async (file) => {
+        if (
+          !currentUid ||
+          !otherUid ||
+          !chatId ||
+          !file
+        ) {
+          return;
+        }
 
-      // Check image type
-      if (
-        !file.type.startsWith("image/")
-      ) {
-        alert(
-          "Please select a valid image."
-        );
-        return;
-      }
+        if (
+          !file.type.startsWith(
+            "image/"
+          )
+        ) {
+          alert(
+            "Please select a valid image."
+          );
+          return;
+        }
 
-      // 5 MB frontend limit
-      if (
-        file.size >
-        5 * 1024 * 1024
-      ) {
-        alert(
-          "Image must be less than 5 MB."
-        );
-        return;
-      }
+        if (
+          file.size >
+          5 * 1024 * 1024
+        ) {
+          alert(
+            "Image must be less than 5 MB."
+          );
+          return;
+        }
 
-      try {
-        setSending(true);
+        try {
+          setSending(true);
 
-        const formData =
-          new FormData();
+          const formData =
+            new FormData();
 
-        formData.append(
-          "image",
-          file
-        );
+          formData.append(
+            "image",
+            file
+          );
 
-        formData.append(
-          "chatId",
-          chatId
-        );
+          formData.append(
+            "chatId",
+            chatId
+          );
 
-        formData.append(
-          "senderId",
-          currentUid
-        );
+          formData.append(
+            "senderId",
+            currentUid
+          );
 
-        formData.append(
-          "receiverId",
-          otherUid
-        );
+          formData.append(
+            "receiverId",
+            otherUid
+          );
 
-        formData.append(
-          "type",
-          "image"
-        );
+          formData.append(
+            "type",
+            "image"
+          );
 
-        console.log(
-          "Uploading image:",
-          {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            chatId,
-            senderId: currentUid,
-            receiverId: otherUid,
+          const response =
+            await fetch(
+              `${API_URL}/api/messages/image`,
+              {
+                method: "POST",
+                body: formData,
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                data.message ||
+                `Server error: ${response.status}`
+            );
           }
-        );
 
-        const response =
-          await fetch(
-            `${API_URL}/api/messages/image`,
-            {
-              method: "POST",
-              body: formData,
-            }
+          if (!data.message) {
+            throw new Error(
+              "Server did not return the uploaded message."
+            );
+          }
+
+          addMessage(
+            data.message
           );
 
-        // Safely read response
-        const data =
-          await response.json();
-
-        console.log(
-          "Image upload response:",
-          response.status,
-          data
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-              data.message ||
-              `Server error: ${response.status}`
+        } catch (error) {
+          console.error(
+            "IMAGE UPLOAD ERROR:",
+            error
           );
+
+          alert(
+            `Could not send picture:\n${error.message}`
+          );
+
+        } finally {
+          setSending(false);
         }
-
-        if (!data.message) {
-          throw new Error(
-            "Server did not return the uploaded message."
-          );
-        }
-
-        addMessage(data.message);
-
-      } catch (error) {
-        console.error(
-          "IMAGE UPLOAD ERROR:",
-          error
-        );
-
-        alert(
-          `Could not send picture:\n${error.message}`
-        );
-      } finally {
-        setSending(false);
-      }
-    },
-    [
-      currentUid,
-      otherUid,
-      chatId,
-      addMessage,
-    ]
-  );
+      },
+      [
+        currentUid,
+        otherUid,
+        chatId,
+        addMessage,
+      ]
+    );
 
   // =====================================================
-  // SEND FILE / DOCUMENT
+  // SEND FILE
   // =====================================================
 
-  const sendFile = useCallback(
-    async (file) => {
-      if (
-        !currentUid ||
-        !otherUid ||
-        !chatId ||
-        !file
-      ) {
-        return;
-      }
+  const sendFile =
+    useCallback(
+      async (file) => {
+        if (
+          !currentUid ||
+          !otherUid ||
+          !chatId ||
+          !file
+        ) {
+          return;
+        }
 
-      // 25 MB frontend limit
-      if (
-        file.size >
-        25 * 1024 * 1024
-      ) {
-        alert(
-          "File must be less than 25 MB."
-        );
-        return;
-      }
+        if (
+          file.size >
+          25 * 1024 * 1024
+        ) {
+          alert(
+            "File must be less than 25 MB."
+          );
+          return;
+        }
 
-      try {
-        setSending(true);
+        try {
+          setSending(true);
 
-        const formData =
-          new FormData();
+          const formData =
+            new FormData();
 
-        formData.append(
-          "file",
-          file
-        );
+          formData.append(
+            "file",
+            file
+          );
 
-        formData.append(
-          "chatId",
-          chatId
-        );
+          formData.append(
+            "chatId",
+            chatId
+          );
 
-        formData.append(
-          "senderId",
-          currentUid
-        );
+          formData.append(
+            "senderId",
+            currentUid
+          );
 
-        formData.append(
-          "receiverId",
-          otherUid
-        );
+          formData.append(
+            "receiverId",
+            otherUid
+          );
 
-        formData.append(
-          "type",
-          "file"
-        );
+          formData.append(
+            "type",
+            "file"
+          );
 
-        console.log(
-          "Uploading file:",
-          {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            chatId,
-            senderId: currentUid,
-            receiverId: otherUid,
+          const response =
+            await fetch(
+              `${API_URL}/api/messages/file`,
+              {
+                method: "POST",
+                body: formData,
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                data.message ||
+                `Server error: ${response.status}`
+            );
           }
-        );
 
-        const response =
-          await fetch(
-            `${API_URL}/api/messages/file`,
-            {
-              method: "POST",
-              body: formData,
-            }
+          if (!data.message) {
+            throw new Error(
+              "Server did not return the uploaded file message."
+            );
+          }
+
+          addMessage(
+            data.message
           );
 
-        const data =
-          await response.json();
-
-        console.log(
-          "File upload response:",
-          response.status,
-          data
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-              data.message ||
-              `Server error: ${response.status}`
+        } catch (error) {
+          console.error(
+            "FILE UPLOAD ERROR:",
+            error
           );
+
+          alert(
+            `Could not send document:\n${error.message}`
+          );
+
+        } finally {
+          setSending(false);
         }
-
-        if (!data.message) {
-          throw new Error(
-            "Server did not return the uploaded file message."
-          );
-        }
-
-        addMessage(data.message);
-
-      } catch (error) {
-        console.error(
-          "FILE UPLOAD ERROR:",
-          error
-        );
-
-        alert(
-          `Could not send document:\n${error.message}`
-        );
-      } finally {
-        setSending(false);
-      }
-    },
-    [
-      currentUid,
-      otherUid,
-      chatId,
-      addMessage,
-    ]
-  );
+      },
+      [
+        currentUid,
+        otherUid,
+        chatId,
+        addMessage,
+      ]
+    );
 
   // =====================================================
   // SEND AUDIO
   // =====================================================
 
-  const sendAudio = useCallback(
-    async (audioBlob) => {
-      if (
-        !currentUid ||
-        !otherUid ||
-        !chatId ||
-        !audioBlob
-      ) {
-        return;
-      }
-
-      try {
-        setSending(true);
-
-        const mimeType =
-          audioBlob.type ||
-          "audio/webm";
-
-        let extension = "webm";
-
+  const sendAudio =
+    useCallback(
+      async (audioBlob) => {
         if (
-          mimeType.includes("mp4")
+          !currentUid ||
+          !otherUid ||
+          !chatId ||
+          !audioBlob
         ) {
-          extension = "m4a";
-        } else if (
-          mimeType.includes("ogg")
-        ) {
-          extension = "ogg";
-        } else if (
-          mimeType.includes("mpeg")
-        ) {
-          extension = "mp3";
-        }
-
-        const audioFile =
-          new File(
-            [audioBlob],
-            `voice-${Date.now()}.${extension}`,
-            {
-              type: mimeType,
-            }
-          );
-
-        // 25 MB limit
-        if (
-          audioFile.size >
-          25 * 1024 * 1024
-        ) {
-          alert(
-            "Voice message must be less than 25 MB."
-          );
           return;
         }
 
-        const formData =
-          new FormData();
+        try {
+          setSending(true);
 
-        formData.append(
-          "audio",
-          audioFile
-        );
+          const mimeType =
+            audioBlob.type ||
+            "audio/webm";
 
-        formData.append(
-          "chatId",
-          chatId
-        );
+          let extension =
+            "webm";
 
-        formData.append(
-          "senderId",
-          currentUid
-        );
-
-        formData.append(
-          "receiverId",
-          otherUid
-        );
-
-        formData.append(
-          "type",
-          "audio"
-        );
-
-        console.log(
-          "Uploading audio:",
-          {
-            name: audioFile.name,
-            type: audioFile.type,
-            size: audioFile.size,
+          if (
+            mimeType.includes("mp4")
+          ) {
+            extension = "m4a";
+          } else if (
+            mimeType.includes("ogg")
+          ) {
+            extension = "ogg";
+          } else if (
+            mimeType.includes("mpeg")
+          ) {
+            extension = "mp3";
           }
-        );
 
-        const response =
-          await fetch(
-            `${API_URL}/api/messages/audio`,
-            {
-              method: "POST",
-              body: formData,
-            }
+          const audioFile =
+            new File(
+              [audioBlob],
+              `voice-${Date.now()}.${extension}`,
+              {
+                type: mimeType,
+              }
+            );
+
+          if (
+            audioFile.size >
+            25 * 1024 * 1024
+          ) {
+            alert(
+              "Voice message must be less than 25 MB."
+            );
+            return;
+          }
+
+          const formData =
+            new FormData();
+
+          formData.append(
+            "audio",
+            audioFile
           );
 
-        const data =
-          await response.json();
-
-        console.log(
-          "Audio upload response:",
-          response.status,
-          data
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-              data.message ||
-              `Server error: ${response.status}`
+          formData.append(
+            "chatId",
+            chatId
           );
+
+          formData.append(
+            "senderId",
+            currentUid
+          );
+
+          formData.append(
+            "receiverId",
+            otherUid
+          );
+
+          formData.append(
+            "type",
+            "audio"
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/api/messages/audio`,
+              {
+                method: "POST",
+                body: formData,
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                data.message ||
+                `Server error: ${response.status}`
+            );
+          }
+
+          if (!data.message) {
+            throw new Error(
+              "Server did not return the audio message."
+            );
+          }
+
+          addMessage(
+            data.message
+          );
+
+        } catch (error) {
+          console.error(
+            "AUDIO UPLOAD ERROR:",
+            error
+          );
+
+          alert(
+            `Could not send voice message:\n${error.message}`
+          );
+
+        } finally {
+          setSending(false);
         }
-
-        if (!data.message) {
-          throw new Error(
-            "Server did not return the audio message."
-          );
-        }
-
-        addMessage(data.message);
-
-      } catch (error) {
-        console.error(
-          "AUDIO UPLOAD ERROR:",
-          error
-        );
-
-        alert(
-          `Could not send voice message:\n${error.message}`
-        );
-      } finally {
-        setSending(false);
-      }
-    },
-    [
-      currentUid,
-      otherUid,
-      chatId,
-      addMessage,
-    ]
-  );
+      },
+      [
+        currentUid,
+        otherUid,
+        chatId,
+        addMessage,
+      ]
+    );
 
   // =====================================================
   // MARK MESSAGES SEEN
@@ -671,7 +753,10 @@ export function useChat(
             );
           }
 
-          // Update local state
+          // ==========================================
+          // UPDATE LOCAL MESSAGES
+          // ==========================================
+
           setMessages(
             (previous) =>
               previous.map(
@@ -691,6 +776,28 @@ export function useChat(
               )
           );
 
+          // ==========================================
+          // SOCKET NOTIFICATION
+          // ==========================================
+
+          if (socket.connected) {
+            socket.emit(
+              "messageSeen",
+              {
+                chatId,
+
+                messageId:
+                  null,
+
+                senderId:
+                  otherUid,
+
+                receiverId:
+                  currentUid,
+              }
+            );
+          }
+
           return data;
 
         } catch (error) {
@@ -703,6 +810,7 @@ export function useChat(
       [
         chatId,
         currentUid,
+        otherUid,
       ]
     );
 

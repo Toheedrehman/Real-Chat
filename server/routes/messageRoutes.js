@@ -17,25 +17,13 @@ const storage = multer.memoryStorage();
 // =====================================================
 
 const fileFilter = (req, file, cb) => {
-  // ---------------------------------------------------
-  // IMAGES
-  // ---------------------------------------------------
-
   if (file.mimetype.startsWith("image/")) {
     return cb(null, true);
   }
 
-  // ---------------------------------------------------
-  // AUDIO
-  // ---------------------------------------------------
-
   if (file.mimetype.startsWith("audio/")) {
     return cb(null, true);
   }
-
-  // ---------------------------------------------------
-  // DOCUMENTS / OTHER FILES
-  // ---------------------------------------------------
 
   return cb(null, true);
 };
@@ -46,11 +34,9 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
   storage,
-
   fileFilter,
 
   limits: {
-    // Maximum file size = 25 MB
     fileSize: 25 * 1024 * 1024,
   },
 });
@@ -94,9 +80,6 @@ function uploadToCloudinary(
             }
           );
 
-        // IMPORTANT:
-        // Send the file directly from memory.
-        // Nothing is written to the Vercel filesystem.
         uploadStream.end(buffer);
 
       } catch (error) {
@@ -104,6 +87,40 @@ function uploadToCloudinary(
       }
     }
   );
+}
+
+// =====================================================
+// SOCKET HELPER
+// =====================================================
+
+function emitNewMessage(req, message) {
+  try {
+    const io = req.app.get("io");
+
+    if (!io) {
+      console.warn(
+        "Socket.IO instance not available"
+      );
+
+      return;
+    }
+
+    io.to(message.chatId).emit(
+      "newMessage",
+      message
+    );
+
+    console.log(
+      "Socket.IO newMessage emitted:",
+      message._id
+    );
+
+  } catch (error) {
+    console.error(
+      "Socket.IO emit error:",
+      error
+    );
+  }
 }
 
 // =====================================================
@@ -167,9 +184,7 @@ router.post(
       const message =
         await Message.create({
           chatId,
-
           senderId,
-
           receiverId,
 
           text: text.trim(),
@@ -177,17 +192,26 @@ router.post(
           type: "text",
 
           mediaUrl: "",
-
           fileName: "",
-
           fileType: "",
-
           fileSize: 0,
-
           duration: 0,
 
           seen: false,
         });
+
+      // ------------------------------------------------
+      // SOCKET.IO
+      // ------------------------------------------------
+
+      emitNewMessage(
+        req,
+        message
+      );
+
+      // ------------------------------------------------
+      // RESPONSE
+      // ------------------------------------------------
 
       return res.status(201).json({
         success: true,
@@ -302,7 +326,7 @@ router.post(
       }
 
       // ------------------------------------------------
-      // UPLOAD IMAGE TO CLOUDINARY
+      // CLOUDINARY
       // ------------------------------------------------
 
       console.log(
@@ -312,7 +336,6 @@ router.post(
       const result =
         await uploadToCloudinary(
           req.file.buffer,
-
           {
             folder:
               "real-chat/messages/images",
@@ -331,15 +354,13 @@ router.post(
       );
 
       // ------------------------------------------------
-      // SAVE MESSAGE TO MONGODB
+      // SAVE MESSAGE
       // ------------------------------------------------
 
       const message =
         await Message.create({
           chatId,
-
           senderId,
-
           receiverId,
 
           text: "",
@@ -366,13 +387,18 @@ router.post(
         "Image message saved successfully"
       );
 
+      // ------------------------------------------------
+      // SOCKET.IO
+      // ------------------------------------------------
+
+      emitNewMessage(
+        req,
+        message
+      );
+
       console.log(
         "===================================="
       );
-
-      // ------------------------------------------------
-      // RESPONSE
-      // ------------------------------------------------
 
       return res.status(201).json({
         success: true,
@@ -443,7 +469,7 @@ router.post(
       );
 
       // ------------------------------------------------
-      // VALIDATE MESSAGE DATA
+      // VALIDATE
       // ------------------------------------------------
 
       if (
@@ -458,10 +484,6 @@ router.post(
         });
       }
 
-      // ------------------------------------------------
-      // VALIDATE FILE
-      // ------------------------------------------------
-
       if (!req.file) {
         return res.status(400).json({
           success: false,
@@ -471,7 +493,7 @@ router.post(
       }
 
       // ------------------------------------------------
-      // UPLOAD DOCUMENT TO CLOUDINARY
+      // CLOUDINARY
       // ------------------------------------------------
 
       console.log(
@@ -481,7 +503,6 @@ router.post(
       const result =
         await uploadToCloudinary(
           req.file.buffer,
-
           {
             folder:
               "real-chat/messages/files",
@@ -500,15 +521,13 @@ router.post(
       );
 
       // ------------------------------------------------
-      // SAVE MESSAGE TO MONGODB
+      // SAVE MESSAGE
       // ------------------------------------------------
 
       const message =
         await Message.create({
           chatId,
-
           senderId,
-
           receiverId,
 
           text: "",
@@ -535,13 +554,18 @@ router.post(
         "File message saved successfully"
       );
 
+      // ------------------------------------------------
+      // SOCKET.IO
+      // ------------------------------------------------
+
+      emitNewMessage(
+        req,
+        message
+      );
+
       console.log(
         "===================================="
       );
-
-      // ------------------------------------------------
-      // RESPONSE
-      // ------------------------------------------------
 
       return res.status(201).json({
         success: true,
@@ -613,7 +637,7 @@ router.post(
       );
 
       // ------------------------------------------------
-      // VALIDATE MESSAGE DATA
+      // VALIDATE
       // ------------------------------------------------
 
       if (
@@ -627,10 +651,6 @@ router.post(
             "chatId, senderId and receiverId are required",
         });
       }
-
-      // ------------------------------------------------
-      // VALIDATE AUDIO
-      // ------------------------------------------------
 
       if (!req.file) {
         return res.status(400).json({
@@ -653,7 +673,7 @@ router.post(
       }
 
       // ------------------------------------------------
-      // UPLOAD AUDIO TO CLOUDINARY
+      // CLOUDINARY
       // ------------------------------------------------
 
       console.log(
@@ -663,13 +683,10 @@ router.post(
       const result =
         await uploadToCloudinary(
           req.file.buffer,
-
           {
             folder:
               "real-chat/messages/audio",
 
-            // Cloudinary treats audio/video
-            // as video resources.
             resource_type:
               "video",
           }
@@ -690,9 +707,7 @@ router.post(
       const message =
         await Message.create({
           chatId,
-
           senderId,
-
           receiverId,
 
           text: "",
@@ -718,6 +733,15 @@ router.post(
 
       console.log(
         "Audio message saved successfully"
+      );
+
+      // ------------------------------------------------
+      // SOCKET.IO
+      // ------------------------------------------------
+
+      emitNewMessage(
+        req,
+        message
       );
 
       console.log(
@@ -805,10 +829,6 @@ router.put(
         currentUid,
       } = req.body;
 
-      // ------------------------------------------------
-      // VALIDATE UID
-      // ------------------------------------------------
-
       if (!currentUid) {
         return res.status(400).json({
           success: false,
@@ -816,10 +836,6 @@ router.put(
             "currentUid is required",
         });
       }
-
-      // ------------------------------------------------
-      // MARK MESSAGES SEEN
-      // ------------------------------------------------
 
       const result =
         await Message.updateMany(
@@ -839,6 +855,28 @@ router.put(
             },
           }
         );
+
+      // ------------------------------------------------
+      // SOCKET.IO SEEN EVENT
+      // ------------------------------------------------
+
+      const io =
+        req.app.get("io");
+
+      if (io) {
+        io.to(conversationId).emit(
+          "messagesSeen",
+          {
+            chatId:
+              conversationId,
+
+            currentUid,
+
+            modifiedCount:
+              result.modifiedCount,
+          }
+        );
+      }
 
       return res.json({
         success: true,
@@ -873,10 +911,6 @@ router.put(
 
 router.use(
   (error, req, res, next) => {
-    // ------------------------------------------------
-    // MULTER ERRORS
-    // ------------------------------------------------
-
     if (
       error instanceof
       multer.MulterError
@@ -898,10 +932,6 @@ router.use(
           error.message,
       });
     }
-
-    // ------------------------------------------------
-    // OTHER UPLOAD ERRORS
-    // ------------------------------------------------
 
     if (error) {
       console.error(

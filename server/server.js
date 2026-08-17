@@ -13,17 +13,42 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
+const http = require("http");
+
+const {
+  initializeSocket,
+} = require("./socket");
 
 dotenv.config();
 
 const app = express();
 
 // =====================================================
+// HTTP SERVER
+// =====================================================
+
+const server =
+  http.createServer(app);
+
+// =====================================================
+// SOCKET.IO
+// =====================================================
+
+const io =
+  initializeSocket(server);
+
+// Make io available to routes
+app.set("io", io);
+
+// =====================================================
 // ROUTES
 // =====================================================
 
-const userRoutes = require("./routes/userRoutes");
-const messageRoutes = require("./routes/messageRoutes");
+const userRoutes =
+  require("./routes/userRoutes");
+
+const messageRoutes =
+  require("./routes/messageRoutes");
 
 // =====================================================
 // CORS
@@ -34,25 +59,41 @@ const allowedOrigins = [
   "http://localhost:3001",
   "http://localhost:5173",
   "https://real-chat-roan.vercel.app",
-].filter(Boolean);
+];
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests without an origin
-      // such as Postman/server-to-server
+    origin: function (
+      origin,
+      callback
+    ) {
       if (!origin) {
-        return callback(null, true);
+        return callback(
+          null,
+          true
+        );
       }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
+      if (
+        allowedOrigins.includes(
+          origin
+        )
+      ) {
+        return callback(
+          null,
+          true
+        );
       }
 
-      console.log("CORS blocked:", origin);
+      console.log(
+        "CORS blocked:",
+        origin
+      );
 
       return callback(
-        new Error("Not allowed by CORS")
+        new Error(
+          "Not allowed by CORS"
+        )
       );
     },
 
@@ -80,7 +121,9 @@ app.use(
 // BODY PARSER
 // =====================================================
 
-app.use(express.json());
+app.use(
+  express.json()
+);
 
 app.use(
   express.urlencoded({
@@ -97,6 +140,7 @@ app.get("/", (req, res) => {
     success: true,
     message:
       "Real Chat Node.js Server is running",
+    socket: true,
   });
 });
 
@@ -104,12 +148,16 @@ app.get("/", (req, res) => {
 // API TEST
 // =====================================================
 
-app.get("/api/test", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "API is working",
-  });
-});
+app.get(
+  "/api/test",
+  (req, res) => {
+    res.status(200).json({
+      success: true,
+      message:
+        "API is working",
+    });
+  }
+);
 
 // =====================================================
 // USER ROUTES
@@ -133,20 +181,29 @@ app.use(
 // 404
 // =====================================================
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-    path: req.originalUrl,
-  });
-});
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      success: false,
+      message:
+        "Route not found",
+      path:
+        req.originalUrl,
+    });
+  }
+);
 
 // =====================================================
 // ERROR HANDLER
 // =====================================================
 
 app.use(
-  (err, req, res, next) => {
+  (
+    err,
+    req,
+    res,
+    next
+  ) => {
     console.error(
       "EXPRESS ERROR:",
       err
@@ -154,45 +211,60 @@ app.use(
 
     res.status(500).json({
       success: false,
-      message: "Server error",
-      error: err.message,
+      message:
+        "Server error",
+      error:
+        err.message,
     });
   }
 );
 
 // =====================================================
-// START SERVER LOCALLY
+// START SERVER
 // =====================================================
 
 const PORT =
   process.env.PORT || 5000;
 
-if (require.main === module) {
+if (
+  require.main === module
+) {
   mongoose
-    .connect(process.env.MONGO_URI)
+    .connect(
+      process.env.MONGO_URI
+    )
     .then(() => {
       console.log(
         "MongoDB connected successfully"
       );
 
-      app.listen(PORT, () => {
-        console.log(
-          `Server running on http://localhost:${PORT}`
-        );
-      });
-    })
-    .catch((error) => {
-      console.error(
-        "MongoDB connection error:",
-        error.message
-      );
+      server.listen(
+        PORT,
+        () => {
+          console.log(
+            `Server running on http://localhost:${PORT}`
+          );
 
-      process.exit(1);
-    });
+          console.log(
+            "Socket.IO server ready"
+          );
+        }
+      );
+    })
+    .catch(
+      (error) => {
+        console.error(
+          "MongoDB connection error:",
+          error.message
+        );
+
+        process.exit(1);
+      }
+    );
 }
 
 // =====================================================
-// VERCEL EXPORT
+// EXPORT
 // =====================================================
 
 module.exports = app;
