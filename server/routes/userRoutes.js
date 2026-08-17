@@ -1,37 +1,16 @@
 const express = require("express");
 const multer = require("multer");
-const fs = require("fs");
 const { Readable } = require("stream");
+const admin = require("firebase-admin");
 
 const cloudinary = require("../config/cloudinary");
 const User = require("../models/user");
 
 const router = express.Router();
 
-// ==========================================
-// OLD UPLOAD DIRECTORY
-// ==========================================
-//
-// Kept only for compatibility with old images
-// already stored as /uploads/... in MongoDB.
-//
-// New images are NOT saved here.
-// New images go to Cloudinary.
-//
-
-const uploadDir = require("path").join(
-  __dirname,
-  "../uploads"
-);
-
-// ==========================================
+// =====================================================
 // MULTER CONFIGURATION
-// ==========================================
-//
-// IMPORTANT:
-// memoryStorage is required for Vercel.
-// We do NOT write uploaded files to disk.
-//
+// =====================================================
 
 const storage = multer.memoryStorage();
 
@@ -50,18 +29,67 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        new Error(
-          "Only image files are allowed"
-        )
+        new Error("Only image files are allowed")
       );
     }
   },
 });
 
-// ==========================================
+// =====================================================
+// FIREBASE TOKEN VERIFICATION
+// =====================================================
+//
+// Used for protected account deletion.
+//
+// Frontend must send:
+//
+// Authorization: Bearer FIREBASE_ID_TOKEN
+//
+// =====================================================
+
+async function verifyFirebaseToken(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || "";
+
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication token is required",
+      });
+    }
+
+    const idToken = authHeader.substring(7);
+
+    if (!idToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication token is missing",
+      });
+    }
+
+    const decodedToken =
+      await admin.auth().verifyIdToken(idToken);
+
+    req.firebaseUser = decodedToken;
+
+    next();
+  } catch (error) {
+    console.error(
+      "FIREBASE TOKEN VERIFICATION ERROR:",
+      error.message
+    );
+
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired authentication token",
+    });
+  }
+}
+
+// =====================================================
 // TEST
 // GET /api/users/test
-// ==========================================
+// =====================================================
 
 router.get("/test", (req, res) => {
   console.log("USER ROUTE TEST");
@@ -72,26 +100,18 @@ router.get("/test", (req, res) => {
   });
 });
 
-// ==========================================
+// =====================================================
 // REGISTER USER
 // POST /api/users/register
-// ==========================================
+// =====================================================
 
 router.post("/register", async (req, res) => {
-  console.log("================================");
-  console.log("POST /api/users/register");
-  console.log("Body:", req.body);
-
   try {
     const {
       firebaseUid,
       name,
       email,
     } = req.body;
-
-    // --------------------------------------
-    // VALIDATE
-    // --------------------------------------
 
     if (!firebaseUid || !name || !email) {
       return res.status(400).json({
@@ -106,9 +126,9 @@ router.post("/register", async (req, res) => {
     const cleanEmail =
       email.trim().toLowerCase();
 
-    // --------------------------------------
+    // -----------------------------------------------
     // CHECK UID
-    // --------------------------------------
+    // -----------------------------------------------
 
     const existingUid =
       await User.findOne({
@@ -116,10 +136,6 @@ router.post("/register", async (req, res) => {
       });
 
     if (existingUid) {
-      console.log(
-        "User already exists by UID"
-      );
-
       return res.status(200).json({
         success: true,
         message: "User already exists",
@@ -127,9 +143,9 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // --------------------------------------
+    // -----------------------------------------------
     // CHECK EMAIL
-    // --------------------------------------
+    // -----------------------------------------------
 
     const existingEmail =
       await User.findOne({
@@ -144,9 +160,9 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // --------------------------------------
+    // -----------------------------------------------
     // CREATE USER
-    // --------------------------------------
+    // -----------------------------------------------
 
     const user = await User.create({
       firebaseUid: cleanUid,
@@ -182,10 +198,175 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// ==========================================
+// =====================================================
+// DELETE ACCOUNT
+// DELETE /api/users/:firebaseUid
+// =====================================================
+//
+// SECURITY:
+// Firebase ID token is required.
+//
+// The UID inside the URL MUST match the UID
+// inside the verified Firebase token.
+//
+// =====================================================
+
+router.delete(
+  "/:firebaseUid",
+  verifyFirebaseToken,
+  async (req, res) => {
+    try {
+      const requestedUid =
+        req.params.firebaseUid.trim();
+
+      const authenticatedUid =
+        req.firebaseUser.uid;
+
+      console.log(
+        "================================"
+      );
+
+      console.log(
+        "DELETE ACCOUNT REQUEST"
+      );
+
+      console.log(
+        "Requested UID:",
+        requestedUid
+      );
+
+      console.log(
+        "Authenticated UID:",
+        authenticatedUid
+      );
+
+      // -----------------------------------------------
+      // SECURITY CHECK
+      // -----------------------------------------------
+
+      if (
+        requestedUid !== authenticatedUid
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You are not authorized to delete this account",
+        });
+      }
+
+      // -----------------------------------------------
+      // FIND USER
+      // -----------------------------------------------
+
+      const user =
+        await User.findOne({
+          firebaseUid: authenticatedUid,
+        });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // -----------------------------------------------
+      // DELETE CLOUDINARY PROFILE IMAGE
+      // -----------------------------------------------
+
+      const profileImage =
+        user.profileImage || "";
+
+      if (
+        profileImage &&
+        profileImage.includes("cloudinary.com")
+      ) {
+        try {
+          const publicId =
+            `real-chat/profiles/${authenticatedUid}`;
+
+          await cloudinary.uploader.destroy(
+            publicId,
+            {
+              resource_type: "image",
+            }
+          );
+
+          console.log(
+            "Cloudinary profile image deleted"
+          );
+        } catch (cloudinaryError) {
+          // Do not stop account deletion
+          // if Cloudinary deletion fails.
+
+          console.error(
+            "CLOUDINARY DELETE ERROR:",
+            cloudinaryError.message
+          );
+        }
+      }
+
+      // -----------------------------------------------
+      // DELETE MONGODB USER
+      // -----------------------------------------------
+
+      const deleteResult =
+        await User.deleteOne({
+          firebaseUid: authenticatedUid,
+        });
+
+      if (
+        deleteResult.deletedCount === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      console.log(
+        "MongoDB user deleted:",
+        authenticatedUid
+      );
+
+      // -----------------------------------------------
+      // IMPORTANT
+      // -----------------------------------------------
+      //
+      // Firebase account is deleted from the
+      // frontend with:
+      //
+      // deleteUser(currentUser)
+      //
+      // AFTER this API succeeds.
+      //
+      // -----------------------------------------------
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "MongoDB account data deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "DELETE ACCOUNT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete account",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
 // GET ALL USERS
 // GET /api/users
-// ==========================================
+// =====================================================
 
 router.get("/", async (req, res) => {
   try {
@@ -221,10 +402,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ==========================================
+// =====================================================
 // GET USER BY FIREBASE UID
 // GET /api/users/:firebaseUid
-// ==========================================
+// =====================================================
 
 router.get(
   "/:firebaseUid",
@@ -239,11 +420,6 @@ router.get(
         }).select("-__v");
 
       if (!user) {
-        console.log(
-          "User not found:",
-          firebaseUid
-        );
-
         return res.status(404).json({
           success: false,
           message: "User not found",
@@ -269,10 +445,10 @@ router.get(
   }
 );
 
-// ==========================================
+// =====================================================
 // UPDATE ONLINE STATUS
 // PUT /api/users/:firebaseUid/status
-// ==========================================
+// =====================================================
 
 router.put(
   "/:firebaseUid/status",
@@ -325,10 +501,10 @@ router.put(
   }
 );
 
-// ==========================================
+// =====================================================
 // UPDATE PROFILE NAME
 // PUT /api/users/:firebaseUid/profile
-// ==========================================
+// =====================================================
 
 router.put(
   "/:firebaseUid/profile",
@@ -367,11 +543,6 @@ router.put(
         });
       }
 
-      console.log(
-        "Profile name updated:",
-        user.name
-      );
-
       return res.status(200).json({
         success: true,
         message:
@@ -393,22 +564,10 @@ router.put(
   }
 );
 
-// ==========================================
+// =====================================================
 // UPLOAD PROFILE PHOTO
 // PUT /api/users/:firebaseUid/photo
-// ==========================================
-//
-// New photos:
-// React
-//   ↓
-// Multer memory
-//   ↓
-// Cloudinary
-//   ↓
-// MongoDB
-//
-// No files are written to Vercel.
-//
+// =====================================================
 
 router.put(
   "/:firebaseUid/photo",
@@ -418,38 +577,12 @@ router.put(
       const firebaseUid =
         req.params.firebaseUid.trim();
 
-      // --------------------------------------
-      // CHECK FILE
-      // --------------------------------------
-
       if (!req.file) {
         return res.status(400).json({
           success: false,
           message: "No image uploaded",
         });
       }
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "PROFILE PHOTO CLOUDINARY UPLOAD"
-      );
-
-      console.log(
-        "Firebase UID:",
-        firebaseUid
-      );
-
-      console.log(
-        "Original file:",
-        req.file.originalname
-      );
-
-      // --------------------------------------
-      // FIND USER
-      // --------------------------------------
 
       const existingUser =
         await User.findOne({
@@ -463,16 +596,9 @@ router.put(
         });
       }
 
-      // --------------------------------------
-      // OLD IMAGE
-      // --------------------------------------
-
-      const oldImage =
-        existingUser.profileImage || "";
-
-      // --------------------------------------
-      // UPLOAD BUFFER TO CLOUDINARY
-      // --------------------------------------
+      // -----------------------------------------------
+      // UPLOAD TO CLOUDINARY
+      // -----------------------------------------------
 
       const imageURL =
         await new Promise(
@@ -508,14 +634,9 @@ router.put(
           }
         );
 
-      console.log(
-        "Cloudinary image URL:",
-        imageURL
-      );
-
-      // --------------------------------------
+      // -----------------------------------------------
       // UPDATE MONGODB
-      // --------------------------------------
+      // -----------------------------------------------
 
       const user =
         await User.findOneAndUpdate(
@@ -531,49 +652,11 @@ router.put(
           }
         ).select("-__v");
 
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-
-      // --------------------------------------
-      // IMPORTANT:
-      // DO NOT DELETE OLD /uploads IMAGES
-      // --------------------------------------
-      //
-      // This keeps existing profile pictures
-      // safe.
-      //
-      // If oldImage is:
-      //
-      // /uploads/old-photo.png
-      //
-      // we leave it alone.
-      //
-      // New image is now Cloudinary.
-      //
-      // --------------------------------------
-
-      console.log(
-        "Previous image:",
-        oldImage || "None"
-      );
-
-      console.log(
-        "New profile image:",
-        imageURL
-      );
-
       return res.status(200).json({
         success: true,
-
         message:
           "Profile image updated successfully",
-
         user,
-
         profileImage: imageURL,
       });
     } catch (error) {
@@ -591,17 +674,12 @@ router.put(
   }
 );
 
-// ==========================================
+// =====================================================
 // MULTER ERROR HANDLER
-// ==========================================
+// =====================================================
 
 router.use(
-  (
-    error,
-    req,
-    res,
-    next
-  ) => {
+  (error, req, res, next) => {
     if (
       error instanceof multer.MulterError
     ) {
@@ -638,8 +716,8 @@ router.use(
   }
 );
 
-// ==========================================
+// =====================================================
 // EXPORT
-// ==========================================
+// =====================================================
 
 module.exports = router;

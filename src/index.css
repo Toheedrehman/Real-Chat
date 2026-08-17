@@ -5386,3 +5386,258 @@ body.dark-mode .settings-page .radio-button {
     height: 44px;
   }
 }
+
+
+/* =====================================================
+   DELETE ACCOUNT
+===================================================== */
+
+.delete-account-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding: 15px 16px;
+
+  border: 1px solid #ef4444;
+  border-radius: 12px;
+
+  background: transparent;
+  color: #ef4444;
+
+  cursor: pointer;
+  text-align: left;
+
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.delete-account-button:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.delete-account-button:active {
+  transform: scale(0.98);
+}
+
+.delete-account-button .option-icon {
+  color: inherit;
+}
+
+.delete-account-button strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.delete-account-button span {
+  display: block;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+/* =====================================================
+   DELETE ACCOUNT CONFIRMATION MODAL
+===================================================== */
+
+.delete-modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.55);
+
+  z-index: 9999;
+
+  backdrop-filter: blur(4px);
+}
+
+.delete-modal {
+  width: 100%;
+  max-width: 440px;
+
+  padding: 28px;
+
+  border-radius: 18px;
+
+  background: white;
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.25);
+
+  animation: deleteModalAppear 0.2s ease;
+}
+
+@keyframes deleteModalAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.delete-modal-icon {
+  width: 52px;
+  height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 16px;
+
+  border-radius: 50%;
+
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.delete-modal h2 {
+  margin: 0 0 10px;
+
+  font-size: 22px;
+  font-weight: 700;
+
+  color: #111827;
+}
+
+.delete-modal p {
+  margin: 0 0 20px;
+
+  font-size: 14px;
+  line-height: 1.6;
+
+  color: #6b7280;
+}
+
+.delete-warning {
+  padding: 12px 14px;
+
+  margin-bottom: 22px;
+
+  border-radius: 10px;
+
+  background: #fef2f2;
+  color: #991b1b;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.delete-modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.delete-cancel-button,
+.delete-confirm-button {
+  flex: 1;
+
+  padding: 12px 16px;
+
+  border-radius: 10px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.delete-cancel-button {
+  border: 1px solid #d1d5db;
+
+  background: white;
+  color: #374151;
+}
+
+.delete-cancel-button:hover {
+  background: #f3f4f6;
+}
+
+.delete-confirm-button {
+  border: 1px solid #ef4444;
+
+  background: #ef4444;
+  color: white;
+}
+
+.delete-confirm-button:hover {
+  background: #dc2626;
+}
+
+.delete-confirm-button:disabled,
+.delete-cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   DARK MODE
+===================================================== */
+
+.dark-mode .delete-modal {
+  background: #1f2937;
+}
+
+.dark-mode .delete-modal h2 {
+  color: #f9fafb;
+}
+
+.dark-mode .delete-modal p {
+  color: #d1d5db;
+}
+
+.dark-mode .delete-warning {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.dark-mode .delete-cancel-button {
+  border-color: #4b5563;
+  background: #374151;
+  color: #f9fafb;
+}
+
+.dark-mode .delete-cancel-button:hover {
+  background: #4b5563;
+}
+
+/* =====================================================
+   MOBILE
+===================================================== */
+
+@media (max-width: 600px) {
+  .delete-modal {
+    padding: 22px;
+    border-radius: 15px;
+  }
+
+  .delete-modal h2 {
+    font-size: 20px;
+  }
+
+  .delete-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .delete-cancel-button,
+  .delete-confirm-button {
+    width: 100%;
+  }
+}
