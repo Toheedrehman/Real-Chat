@@ -6,7 +6,12 @@ import {
 
 import socket from "../socket";
 
+// =====================================================
+// BACKEND API
+// =====================================================
+
 const API_URL =
+  import.meta.env.VITE_API_URL ||
   "https://real-chat-5fxb.vercel.app";
 
 // =====================================================
@@ -36,18 +41,18 @@ export function useChat(
   const [sending, setSending] =
     useState(false);
 
-  // =====================================================
+  // ===================================================
   // OTHER USER
-  // =====================================================
+  // ===================================================
 
   const otherUid =
     selectedUser?.firebaseUid ||
     selectedUser?.id ||
     null;
 
-  // =====================================================
+  // ===================================================
   // CHAT ID
-  // =====================================================
+  // ===================================================
 
   const chatId =
     currentUid && otherUid
@@ -57,9 +62,9 @@ export function useChat(
         )
       : null;
 
-  // =====================================================
+  // ===================================================
   // ADD MESSAGE
-  // =====================================================
+  // ===================================================
 
   const addMessage = useCallback(
     (newMessage) => {
@@ -72,21 +77,25 @@ export function useChat(
           newMessage._id ||
           newMessage.id;
 
-        const exists =
-          previous.some((message) => {
-            const messageId =
-              message._id ||
-              message.id;
+        // Prevent duplicate message
+        if (newId) {
+          const exists =
+            previous.some(
+              (message) => {
+                const messageId =
+                  message._id ||
+                  message.id;
 
-            return (
-              messageId &&
-              newId &&
-              messageId === newId
+                return (
+                  messageId &&
+                  messageId === newId
+                );
+              }
             );
-          });
 
-        if (exists) {
-          return previous;
+          if (exists) {
+            return previous;
+          }
         }
 
         return [
@@ -98,9 +107,9 @@ export function useChat(
     []
   );
 
-  // =====================================================
-  // GET MESSAGES
-  // =====================================================
+  // ===================================================
+  // FETCH OLD MESSAGES
+  // ===================================================
 
   const fetchMessages =
     useCallback(async () => {
@@ -134,7 +143,7 @@ export function useChat(
 
       } catch (error) {
         console.error(
-          "Message loading error:",
+          "❌ Message loading error:",
           error
         );
 
@@ -145,63 +154,84 @@ export function useChat(
       }
     }, [chatId]);
 
-  // =====================================================
-  // LOAD OLD MESSAGES
-  // =====================================================
+  // ===================================================
+  // LOAD MESSAGES WHEN CHAT CHANGES
+  // ===================================================
 
   useEffect(() => {
-    if (!chatId) {
-      setMessages([]);
-      return;
-    }
-
     fetchMessages();
-  }, [
-    chatId,
-    fetchMessages,
-  ]);
+  }, [fetchMessages]);
 
-  // =====================================================
-  // SOCKET: JOIN CHAT
-  // =====================================================
+  // ===================================================
+  // SOCKET CONNECTION + CHAT ROOM
+  // ===================================================
 
   useEffect(() => {
     if (!chatId) {
       return;
     }
 
-    // Make sure socket is connected
-    if (!socket.connected) {
-      socket.connect();
-    }
+    let joined = false;
 
-    // Join current chat room
-    socket.emit(
-      "joinChat",
-      chatId
-    );
+    const joinRoom = () => {
+      if (!socket.connected) {
+        return;
+      }
 
-    console.log(
-      "Joined chat room:",
-      chatId
-    );
-
-    return () => {
       socket.emit(
-        "leaveChat",
+        "joinChat",
         chatId
       );
 
+      joined = true;
+
       console.log(
-        "Left chat room:",
+        "💬 Joined chat room:",
         chatId
       );
     };
+
+    // If already connected
+    if (socket.connected) {
+      joinRoom();
+    } else {
+      // Connect socket
+      socket.connect();
+    }
+
+    // IMPORTANT:
+    // Join room AFTER connection
+    socket.on(
+      "connect",
+      joinRoom
+    );
+
+    return () => {
+      socket.off(
+        "connect",
+        joinRoom
+      );
+
+      if (
+        joined &&
+        socket.connected
+      ) {
+        socket.emit(
+          "leaveChat",
+          chatId
+        );
+
+        console.log(
+          "🚪 Left chat room:",
+          chatId
+        );
+      }
+    };
   }, [chatId]);
 
-  // =====================================================
-  // SOCKET: NEW MESSAGE
-  // =====================================================
+  // ===================================================
+  // RECEIVE NEW MESSAGE
+  // ===================================================
 
   useEffect(() => {
     if (!chatId) {
@@ -214,19 +244,20 @@ export function useChat(
           return;
         }
 
-        // Only add message belonging
-        // to current chat
+        console.log(
+          "📨 Socket new message:",
+          newMessage
+        );
+
+        // Make sure message belongs
+        // to currently opened chat
         if (
-          newMessage.chatId !==
-          chatId
+          String(
+            newMessage.chatId
+          ) !== String(chatId)
         ) {
           return;
         }
-
-        console.log(
-          "Socket new message:",
-          newMessage
-        );
 
         addMessage(
           newMessage
@@ -249,9 +280,9 @@ export function useChat(
     addMessage,
   ]);
 
-  // =====================================================
-  // SEND TEXT
-  // =====================================================
+  // ===================================================
+  // SEND TEXT MESSAGE
+  // ===================================================
 
   const sendMessage =
     useCallback(
@@ -282,16 +313,12 @@ export function useChat(
 
                 body: JSON.stringify({
                   chatId,
-
                   senderId:
                     currentUid,
-
                   receiverId:
                     otherUid,
-
                   text:
                     text.trim(),
-
                   type: "text",
                 }),
               }
@@ -308,21 +335,15 @@ export function useChat(
             );
           }
 
-          /*
-           * Add locally.
-           *
-           * addMessage() prevents a duplicate
-           * if Socket.IO also sends the same
-           * message back.
-           */
-
+          // Add locally
+          // Socket duplicate is prevented
           addMessage(
             data.message
           );
 
         } catch (error) {
           console.error(
-            "Send message error:",
+            "❌ Send message error:",
             error
           );
 
@@ -342,9 +363,9 @@ export function useChat(
       ]
     );
 
-  // =====================================================
+  // ===================================================
   // SEND IMAGE
-  // =====================================================
+  // ===================================================
 
   const sendImage =
     useCallback(
@@ -405,11 +426,6 @@ export function useChat(
             otherUid
           );
 
-          formData.append(
-            "type",
-            "image"
-          );
-
           const response =
             await fetch(
               `${API_URL}/api/messages/image`,
@@ -430,19 +446,13 @@ export function useChat(
             );
           }
 
-          if (!data.message) {
-            throw new Error(
-              "Server did not return the uploaded message."
-            );
-          }
-
           addMessage(
             data.message
           );
 
         } catch (error) {
           console.error(
-            "IMAGE UPLOAD ERROR:",
+            "❌ Image upload error:",
             error
           );
 
@@ -462,9 +472,9 @@ export function useChat(
       ]
     );
 
-  // =====================================================
+  // ===================================================
   // SEND FILE
-  // =====================================================
+  // ===================================================
 
   const sendFile =
     useCallback(
@@ -514,11 +524,6 @@ export function useChat(
             otherUid
           );
 
-          formData.append(
-            "type",
-            "file"
-          );
-
           const response =
             await fetch(
               `${API_URL}/api/messages/file`,
@@ -539,19 +544,13 @@ export function useChat(
             );
           }
 
-          if (!data.message) {
-            throw new Error(
-              "Server did not return the uploaded file message."
-            );
-          }
-
           addMessage(
             data.message
           );
 
         } catch (error) {
           console.error(
-            "FILE UPLOAD ERROR:",
+            "❌ File upload error:",
             error
           );
 
@@ -571,9 +570,9 @@ export function useChat(
       ]
     );
 
-  // =====================================================
+  // ===================================================
   // SEND AUDIO
-  // =====================================================
+  // ===================================================
 
   const sendAudio =
     useCallback(
@@ -653,11 +652,6 @@ export function useChat(
             otherUid
           );
 
-          formData.append(
-            "type",
-            "audio"
-          );
-
           const response =
             await fetch(
               `${API_URL}/api/messages/audio`,
@@ -678,19 +672,13 @@ export function useChat(
             );
           }
 
-          if (!data.message) {
-            throw new Error(
-              "Server did not return the audio message."
-            );
-          }
-
           addMessage(
             data.message
           );
 
         } catch (error) {
           console.error(
-            "AUDIO UPLOAD ERROR:",
+            "❌ Audio upload error:",
             error
           );
 
@@ -710,9 +698,9 @@ export function useChat(
       ]
     );
 
-  // =====================================================
+  // ===================================================
   // MARK MESSAGES SEEN
-  // =====================================================
+  // ===================================================
 
   const markMessagesSeen =
     useCallback(
@@ -753,10 +741,7 @@ export function useChat(
             );
           }
 
-          // ==========================================
-          // UPDATE LOCAL MESSAGES
-          // ==========================================
-
+          // Update local messages
           setMessages(
             (previous) =>
               previous.map(
@@ -776,22 +761,16 @@ export function useChat(
               )
           );
 
-          // ==========================================
-          // SOCKET NOTIFICATION
-          // ==========================================
-
-          if (socket.connected) {
+          // Notify sender
+          if (
+            socket.connected
+          ) {
             socket.emit(
               "messageSeen",
               {
                 chatId,
-
-                messageId:
-                  null,
-
                 senderId:
                   otherUid,
-
                 receiverId:
                   currentUid,
               }
@@ -802,7 +781,7 @@ export function useChat(
 
         } catch (error) {
           console.error(
-            "Mark seen error:",
+            "❌ Mark seen error:",
             error
           );
         }
@@ -814,27 +793,21 @@ export function useChat(
       ]
     );
 
-  // =====================================================
+  // ===================================================
   // RETURN
-  // =====================================================
+  // ===================================================
 
   return {
     messages,
-
     loading,
-
     sending,
 
     sendMessage,
-
     sendImage,
-
     sendFile,
-
     sendAudio,
 
     markMessagesSeen,
-
     fetchMessages,
   };
 }

@@ -9,6 +9,10 @@ dns.setServers([
   "1.1.1.1",
 ]);
 
+// =====================================================
+// IMPORTS
+// =====================================================
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -19,7 +23,15 @@ const {
   initializeSocket,
 } = require("./socket");
 
+// =====================================================
+// ENVIRONMENT
+// =====================================================
+
 dotenv.config();
+
+// =====================================================
+// EXPRESS APP
+// =====================================================
 
 const app = express();
 
@@ -27,66 +39,42 @@ const app = express();
 // HTTP SERVER
 // =====================================================
 
-const server =
-  http.createServer(app);
+const server = http.createServer(app);
 
 // =====================================================
-// SOCKET.IO
-// =====================================================
-
-const io =
-  initializeSocket(server);
-
-// Make io available to routes
-app.set("io", io);
-
-// =====================================================
-// ROUTES
-// =====================================================
-
-const userRoutes =
-  require("./routes/userRoutes");
-
-const messageRoutes =
-  require("./routes/messageRoutes");
-
-// =====================================================
-// CORS
+// ALLOWED FRONTEND ORIGINS
 // =====================================================
 
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:5173",
+
+  // Production frontend
   "https://real-chat-roan.vercel.app",
 ];
 
+// =====================================================
+// EXPRESS CORS
+// =====================================================
+
 app.use(
   cors({
-    origin: function (
-      origin,
-      callback
-    ) {
+    origin: function (origin, callback) {
+      // Allow requests without Origin
+      // such as Postman/server-to-server
       if (!origin) {
-        return callback(
-          null,
-          true
-        );
+        return callback(null, true);
       }
 
       if (
-        allowedOrigins.includes(
-          origin
-        )
+        allowedOrigins.includes(origin)
       ) {
-        return callback(
-          null,
-          true
-        );
+        return callback(null, true);
       }
 
       console.log(
-        "CORS blocked:",
+        "❌ CORS blocked:",
         origin
       );
 
@@ -118,18 +106,40 @@ app.use(
 );
 
 // =====================================================
+// SOCKET.IO
+// =====================================================
+
+const io = initializeSocket(server);
+
+// Make Socket.IO available inside routes
+app.set("io", io);
+
+// =====================================================
 // BODY PARSER
 // =====================================================
 
 app.use(
-  express.json()
+  express.json({
+    limit: "10mb",
+  })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
+    limit: "10mb",
   })
 );
+
+// =====================================================
+// ROUTES
+// =====================================================
+
+const userRoutes =
+  require("./routes/userRoutes");
+
+const messageRoutes =
+  require("./routes/messageRoutes");
 
 // =====================================================
 // HEALTH CHECK
@@ -138,9 +148,16 @@ app.use(
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
+
     message:
       "Real Chat Node.js Server is running",
+
     socket: true,
+
+    mongodb:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
   });
 });
 
@@ -153,8 +170,32 @@ app.get(
   (req, res) => {
     res.status(200).json({
       success: true,
+      message: "API is working",
+      socket: true,
+    });
+  }
+);
+
+// =====================================================
+// SOCKET TEST
+// =====================================================
+
+app.get(
+  "/api/socket-test",
+  (req, res) => {
+    const socketIO =
+      req.app.get("io");
+
+    res.status(200).json({
+      success: true,
+
+      socket:
+        !!socketIO,
+
       message:
-        "API is working",
+        socketIO
+          ? "Socket.IO is initialized"
+          : "Socket.IO is not initialized",
     });
   }
 );
@@ -178,15 +219,17 @@ app.use(
 );
 
 // =====================================================
-// 404
+// 404 HANDLER
 // =====================================================
 
 app.use(
   (req, res) => {
     res.status(404).json({
       success: false,
+
       message:
         "Route not found",
+
       path:
         req.originalUrl,
     });
@@ -205,14 +248,28 @@ app.use(
     next
   ) => {
     console.error(
-      "EXPRESS ERROR:",
+      "❌ EXPRESS ERROR:",
       err
     );
 
-    res.status(500).json({
+    // CORS error
+    if (
+      err.message ===
+      "Not allowed by CORS"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "CORS origin not allowed",
+      });
+    }
+
+    return res.status(500).json({
       success: false,
+
       message:
         "Server error",
+
       error:
         err.message,
     });
@@ -220,47 +277,76 @@ app.use(
 );
 
 // =====================================================
-// START SERVER
+// DATABASE + SERVER START
 // =====================================================
 
 const PORT =
   process.env.PORT || 5000;
 
+async function startServer() {
+  try {
+    // -----------------------------------------------
+    // CHECK MONGO URI
+    // -----------------------------------------------
+
+    if (!process.env.MONGO_URI) {
+      throw new Error(
+        "MONGO_URI is missing from .env"
+      );
+    }
+
+    // -----------------------------------------------
+    // CONNECT MONGODB
+    // -----------------------------------------------
+
+    await mongoose.connect(
+      process.env.MONGO_URI
+    );
+
+    console.log(
+      "✅ MongoDB connected successfully"
+    );
+
+    // -----------------------------------------------
+    // START HTTP + SOCKET SERVER
+    // -----------------------------------------------
+
+    server.listen(
+      PORT,
+      "0.0.0.0",
+      () => {
+        console.log(
+          `🚀 Server running on http://localhost:${PORT}`
+        );
+
+        console.log(
+          "🔌 Socket.IO server ready"
+        );
+
+        console.log(
+          `📡 Socket endpoint: http://localhost:${PORT}`
+        );
+      }
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ Server startup error:",
+      error
+    );
+
+    process.exit(1);
+  }
+}
+
+// =====================================================
+// START ONLY WHEN RUN DIRECTLY
+// =====================================================
+
 if (
   require.main === module
 ) {
-  mongoose
-    .connect(
-      process.env.MONGO_URI
-    )
-    .then(() => {
-      console.log(
-        "MongoDB connected successfully"
-      );
-
-      server.listen(
-        PORT,
-        () => {
-          console.log(
-            `Server running on http://localhost:${PORT}`
-          );
-
-          console.log(
-            "Socket.IO server ready"
-          );
-        }
-      );
-    })
-    .catch(
-      (error) => {
-        console.error(
-          "MongoDB connection error:",
-          error.message
-        );
-
-        process.exit(1);
-      }
-    );
+  startServer();
 }
 
 // =====================================================
