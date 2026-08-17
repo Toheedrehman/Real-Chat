@@ -18,7 +18,7 @@ const upload = multer({
   storage,
 
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024, // 5 MB
   },
 
   fileFilter: function (req, file, cb) {
@@ -49,7 +49,8 @@ const upload = multer({
 
 async function verifyFirebaseToken(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
+    const authHeader =
+      req.headers.authorization || "";
 
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
@@ -81,7 +82,8 @@ async function verifyFirebaseToken(req, res, next) {
 
     return res.status(401).json({
       success: false,
-      message: "Invalid or expired authentication token",
+      message:
+        "Invalid or expired authentication token",
     });
   }
 }
@@ -94,15 +96,23 @@ async function verifyFirebaseToken(req, res, next) {
 router.get("/test", (req, res) => {
   console.log("USER ROUTE TEST");
 
-  res.json({
+  return res.status(200).json({
     success: true,
     message: "Users route is working",
   });
 });
 
 // =====================================================
-// REGISTER USER
+// REGISTER / LINK USER
 // POST /api/users/register
+// =====================================================
+//
+// Handles:
+//
+// 1. Existing Firebase UID
+// 2. Existing email with different Firebase UID
+// 3. Completely new user
+//
 // =====================================================
 
 router.post("/register", async (req, res) => {
@@ -113,6 +123,10 @@ router.post("/register", async (req, res) => {
       email,
     } = req.body;
 
+    // -----------------------------------------------
+    // VALIDATION
+    // -----------------------------------------------
+
     if (!firebaseUid || !name || !email) {
       return res.status(400).json({
         success: false,
@@ -121,13 +135,45 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    const cleanUid = firebaseUid.trim();
-    const cleanName = name.trim();
+    const cleanUid =
+      String(firebaseUid).trim();
+
+    const cleanName =
+      String(name).trim();
+
     const cleanEmail =
-      email.trim().toLowerCase();
+      String(email)
+        .trim()
+        .toLowerCase();
+
+    if (!cleanUid || !cleanName || !cleanEmail) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "firebaseUid, name and email cannot be empty",
+      });
+    }
+
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "MONGODB REGISTER / LINK"
+    );
+
+    console.log(
+      "Firebase UID:",
+      cleanUid
+    );
+
+    console.log(
+      "Email:",
+      cleanEmail
+    );
 
     // -----------------------------------------------
-    // CHECK UID
+    // 1. CHECK FIREBASE UID
     // -----------------------------------------------
 
     const existingUid =
@@ -136,6 +182,10 @@ router.post("/register", async (req, res) => {
       });
 
     if (existingUid) {
+      console.log(
+        "User already exists by Firebase UID"
+      );
+
       return res.status(200).json({
         success: true,
         message: "User already exists",
@@ -144,7 +194,7 @@ router.post("/register", async (req, res) => {
     }
 
     // -----------------------------------------------
-    // CHECK EMAIL
+    // 2. CHECK EMAIL
     // -----------------------------------------------
 
     const existingEmail =
@@ -152,26 +202,72 @@ router.post("/register", async (req, res) => {
         email: cleanEmail,
       });
 
+    // -----------------------------------------------
+    // EXISTING EMAIL + NEW FIREBASE UID
+    // -----------------------------------------------
+    //
+    // This fixes the problem:
+    //
+    // Firebase UID changed
+    // but email already exists in MongoDB.
+    //
+    // Instead of returning:
+    //
+    // "Email already exists in MongoDB"
+    //
+    // we connect the existing MongoDB account
+    // to the current Firebase UID.
+    //
+    // -----------------------------------------------
+
     if (existingEmail) {
-      return res.status(400).json({
-        success: false,
+      console.log(
+        "Existing MongoDB user found by email"
+      );
+
+      console.log(
+        "Old Firebase UID:",
+        existingEmail.firebaseUid
+      );
+
+      console.log(
+        "New Firebase UID:",
+        cleanUid
+      );
+
+      existingEmail.firebaseUid =
+        cleanUid;
+
+      existingEmail.name =
+        cleanName;
+
+      await existingEmail.save();
+
+      console.log(
+        "Existing MongoDB account linked successfully"
+      );
+
+      return res.status(200).json({
+        success: true,
         message:
-          "Email already exists in MongoDB",
+          "Existing account linked to current Firebase account",
+        user: existingEmail,
       });
     }
 
     // -----------------------------------------------
-    // CREATE USER
+    // 3. CREATE NEW USER
     // -----------------------------------------------
 
-    const user = await User.create({
-      firebaseUid: cleanUid,
-      name: cleanName,
-      email: cleanEmail,
-      profileImage: "",
-      isOnline: true,
-      lastSeen: new Date(),
-    });
+    const user =
+      await User.create({
+        firebaseUid: cleanUid,
+        name: cleanName,
+        email: cleanEmail,
+        profileImage: "",
+        isOnline: true,
+        lastSeen: new Date(),
+      });
 
     console.log(
       "MongoDB user created:",
@@ -190,6 +286,18 @@ router.post("/register", async (req, res) => {
       error
     );
 
+    // -----------------------------------------------
+    // DUPLICATE KEY ERROR
+    // -----------------------------------------------
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A user with this Firebase UID or email already exists",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -206,7 +314,7 @@ router.post("/register", async (req, res) => {
 // SECURITY:
 // Firebase ID token is required.
 //
-// The UID inside the URL MUST match the UID
+// The UID in the URL MUST match the UID
 // inside the verified Firebase token.
 //
 // =====================================================
@@ -278,8 +386,9 @@ router.delete(
         user.profileImage || "";
 
       if (
-        profileImage &&
-        profileImage.includes("cloudinary.com")
+        profileImage.includes(
+          "cloudinary.com"
+        )
       ) {
         try {
           const publicId =
@@ -296,9 +405,6 @@ router.delete(
             "Cloudinary profile image deleted"
           );
         } catch (cloudinaryError) {
-          // Do not stop account deletion
-          // if Cloudinary deletion fails.
-
           console.error(
             "CLOUDINARY DELETE ERROR:",
             cloudinaryError.message
@@ -330,16 +436,7 @@ router.delete(
       );
 
       // -----------------------------------------------
-      // IMPORTANT
-      // -----------------------------------------------
-      //
-      // Firebase account is deleted from the
-      // frontend with:
-      //
-      // deleteUser(currentUser)
-      //
-      // AFTER this API succeeds.
-      //
+      // RESPONSE
       // -----------------------------------------------
 
       return res.status(200).json({
@@ -370,7 +467,10 @@ router.delete(
 
 router.get("/", async (req, res) => {
   try {
-    const { currentUid } = req.query;
+    const currentUid =
+      req.query.currentUid
+        ? String(req.query.currentUid).trim()
+        : "";
 
     const filter = currentUid
       ? {
@@ -380,9 +480,10 @@ router.get("/", async (req, res) => {
         }
       : {};
 
-    const users = await User.find(filter)
-      .select("-__v")
-      .sort({ name: 1 });
+    const users =
+      await User.find(filter)
+        .select("-__v")
+        .sort({ name: 1 });
 
     return res.status(200).json({
       success: true,
@@ -457,7 +558,8 @@ router.put(
       const firebaseUid =
         req.params.firebaseUid.trim();
 
-      const { isOnline } = req.body;
+      const { isOnline } =
+        req.body;
 
       const user =
         await User.findOneAndUpdate(
@@ -513,9 +615,13 @@ router.put(
       const firebaseUid =
         req.params.firebaseUid.trim();
 
-      const { name } = req.body;
+      const { name } =
+        req.body;
 
-      if (!name || !name.trim()) {
+      if (
+        !name ||
+        !name.trim()
+      ) {
         return res.status(400).json({
           success: false,
           message: "Name is required",
@@ -568,6 +674,13 @@ router.put(
 // UPLOAD PROFILE PHOTO
 // PUT /api/users/:firebaseUid/photo
 // =====================================================
+//
+// Uploads profile image directly to Cloudinary.
+//
+// This is Vercel-safe because we do NOT permanently
+// store the uploaded file inside /uploads.
+//
+// =====================================================
 
 router.put(
   "/:firebaseUid/photo",
@@ -577,12 +690,20 @@ router.put(
       const firebaseUid =
         req.params.firebaseUid.trim();
 
+      // -----------------------------------------------
+      // CHECK FILE
+      // -----------------------------------------------
+
       if (!req.file) {
         return res.status(400).json({
           success: false,
           message: "No image uploaded",
         });
       }
+
+      // -----------------------------------------------
+      // FIND USER
+      // -----------------------------------------------
 
       const existingUser =
         await User.findOne({
@@ -652,6 +773,18 @@ router.put(
           }
         ).select("-__v");
 
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      console.log(
+        "Profile image updated:",
+        imageURL
+      );
+
       return res.status(200).json({
         success: true,
         message:
@@ -681,7 +814,8 @@ router.put(
 router.use(
   (error, req, res, next) => {
     if (
-      error instanceof multer.MulterError
+      error instanceof
+      multer.MulterError
     ) {
       if (
         error.code ===
