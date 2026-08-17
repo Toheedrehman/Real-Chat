@@ -13,6 +13,8 @@ import {
   KeyRound,
   Trash2,
   AlertTriangle,
+  CheckCircle,
+  X,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
@@ -36,7 +38,7 @@ export default function Settings() {
     "http://localhost:5000";
 
   // =====================================================
-  // LOAD SAVED SETTINGS
+  // SETTINGS
   // =====================================================
 
   const [darkMode, setDarkMode] = useState(
@@ -49,21 +51,29 @@ export default function Settings() {
 
   const [showOnlineStatus, setShowOnlineStatus] =
     useState(
-      localStorage.getItem("showOnlineStatus") !==
-        "off"
+      localStorage.getItem("showOnlineStatus") !== "off"
     );
 
   // =====================================================
-  // DELETE ACCOUNT STATE
+  // DELETE ACCOUNT STATES
   // =====================================================
 
   const [showDeleteConfirm, setShowDeleteConfirm] =
     useState(false);
 
-  const [deletingAccount, setDeletingAccount] =
+  const [showPasswordModal, setShowPasswordModal] =
+    useState(false);
+
+  const [showDeleteSuccess, setShowDeleteSuccess] =
     useState(false);
 
   const [password, setPassword] = useState("");
+
+  const [deletingAccount, setDeletingAccount] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
 
   // =====================================================
   // APPLY DARK MODE
@@ -75,7 +85,9 @@ export default function Settings() {
         "dark-mode"
       );
 
-      document.body.classList.add("dark-mode");
+      document.body.classList.add(
+        "dark-mode"
+      );
 
       localStorage.setItem(
         "appearance",
@@ -86,7 +98,9 @@ export default function Settings() {
         "dark-mode"
       );
 
-      document.body.classList.remove("dark-mode");
+      document.body.classList.remove(
+        "dark-mode"
+      );
 
       localStorage.setItem(
         "appearance",
@@ -142,157 +156,255 @@ export default function Settings() {
   };
 
   // =====================================================
-  // OPEN DELETE MODAL
+  // OPEN DELETE CONFIRMATION
   // =====================================================
 
-  const openDeleteModal = () => {
-    setPassword("");
+  const openDeleteConfirmation = () => {
+    setErrorMessage("");
     setShowDeleteConfirm(true);
   };
 
   // =====================================================
-  // CLOSE DELETE MODAL
+  // CLOSE DELETE CONFIRMATION
   // =====================================================
 
-  const closeDeleteModal = () => {
+  const closeDeleteConfirmation = () => {
     if (deletingAccount) {
       return;
     }
 
-    setPassword("");
     setShowDeleteConfirm(false);
+  };
+
+  // =====================================================
+  // START DELETE PROCESS
+  // =====================================================
+
+  const startDeleteProcess = async () => {
+    if (deletingAccount) {
+      return;
+    }
+
+    try {
+      const auth = getAuth();
+
+      const currentUser = auth.currentUser;
+
+      // -----------------------------------------------
+      // CHECK USER
+      // -----------------------------------------------
+
+      if (!currentUser) {
+        setErrorMessage(
+          "No logged-in account was found."
+        );
+
+        return;
+      }
+
+      console.log(
+        "Starting account deletion:",
+        currentUser.uid
+      );
+
+      // -----------------------------------------------
+      // CHECK LOGIN PROVIDER
+      // -----------------------------------------------
+
+      const passwordProvider =
+        currentUser.providerData.find(
+          (provider) =>
+            provider.providerId ===
+            "password"
+        );
+
+      // -----------------------------------------------
+      // EMAIL/PASSWORD USER
+      // -----------------------------------------------
+
+      if (passwordProvider) {
+        setShowDeleteConfirm(false);
+        setPassword("");
+        setErrorMessage("");
+        setShowPasswordModal(true);
+
+        return;
+      }
+
+      // -----------------------------------------------
+      // OTHER AUTH PROVIDERS
+      // -----------------------------------------------
+
+      await deleteAccount(currentUser);
+
+    } catch (error) {
+      console.error(
+        "START DELETE ERROR:",
+        error
+      );
+
+      setErrorMessage(
+        error.message ||
+          "Unable to start account deletion."
+      );
+    }
+  };
+
+  // =====================================================
+  // REAUTHENTICATE
+  // =====================================================
+
+  const handleReauthentication = async () => {
+    if (deletingAccount) {
+      return;
+    }
+
+    if (!password.trim()) {
+      setErrorMessage(
+        "Please enter your password."
+      );
+
+      return;
+    }
+
+    try {
+      setDeletingAccount(true);
+      setErrorMessage("");
+
+      const auth = getAuth();
+
+      const currentUser = auth.currentUser;
+
+      // -----------------------------------------------
+      // CHECK USER
+      // -----------------------------------------------
+
+      if (!currentUser) {
+        throw new Error(
+          "No logged-in account was found."
+        );
+      }
+
+      console.log(
+        "Re-authenticating Firebase user..."
+      );
+
+      // -----------------------------------------------
+      // CREATE CREDENTIAL
+      // -----------------------------------------------
+
+      const credential =
+        EmailAuthProvider.credential(
+          currentUser.email,
+          password
+        );
+
+      // -----------------------------------------------
+      // REAUTHENTICATE
+      // -----------------------------------------------
+
+      await reauthenticateWithCredential(
+        currentUser,
+        credential
+      );
+
+      console.log(
+        "Firebase re-authentication successful"
+      );
+
+      // -----------------------------------------------
+      // REFRESH TOKEN
+      // -----------------------------------------------
+
+      await currentUser.getIdToken(
+        true
+      );
+
+      console.log(
+        "Firebase authentication refreshed"
+      );
+
+      // -----------------------------------------------
+      // DELETE ACCOUNT
+      // -----------------------------------------------
+
+      await deleteAccount(
+        currentUser
+      );
+
+    } catch (error) {
+      console.error(
+        "REAUTHENTICATION ERROR:",
+        error
+      );
+
+      setDeletingAccount(false);
+
+      if (
+        error.code ===
+        "auth/wrong-password"
+      ) {
+        setErrorMessage(
+          "Incorrect password. Please try again."
+        );
+
+        return;
+      }
+
+      if (
+        error.code ===
+        "auth/invalid-credential"
+      ) {
+        setErrorMessage(
+          "Incorrect password. Please try again."
+        );
+
+        return;
+      }
+
+      if (
+        error.code ===
+        "auth/too-many-requests"
+      ) {
+        setErrorMessage(
+          "Too many attempts. Please try again later."
+        );
+
+        return;
+      }
+
+      setErrorMessage(
+        error.message ||
+          "Authentication failed."
+      );
+    }
   };
 
   // =====================================================
   // DELETE ACCOUNT
   // =====================================================
 
-  const handleDeleteAccount = async () => {
-    if (deletingAccount) {
-      return;
-    }
-
+  const deleteAccount = async (
+    currentUser
+  ) => {
     try {
       setDeletingAccount(true);
+      setErrorMessage("");
 
-      const auth = getAuth();
-
-      const currentUser = auth.currentUser;
-
-      // =================================================
-      // CHECK USER
-      // =================================================
-
-      if (!currentUser) {
-        alert(
-          "No logged-in account was found."
-        );
-
-        setDeletingAccount(false);
-
-        return;
-      }
-
-      const firebaseUid = currentUser.uid;
-
-      console.log(
-        "Starting account deletion:",
-        firebaseUid
-      );
-
-      // =================================================
-      // CHECK AUTH PROVIDER
-      // =================================================
-
-      const providerData =
-        currentUser.providerData || [];
-
-      const passwordProvider =
-        providerData.find(
-          (provider) =>
-            provider.providerId ===
-            "password"
-        );
-
-      // =================================================
-      // EMAIL/PASSWORD RE-AUTHENTICATION
-      // =================================================
-
-      if (passwordProvider) {
-        if (!password.trim()) {
-          alert(
-            "Please enter your current password."
-          );
-
-          setDeletingAccount(false);
-
-          return;
-        }
-
-        console.log(
-          "Re-authenticating Firebase user..."
-        );
-
-        const credential =
-          EmailAuthProvider.credential(
-            currentUser.email,
-            password
-          );
-
-        await reauthenticateWithCredential(
-          currentUser,
-          credential
-        );
-
-        console.log(
-          "Firebase re-authentication successful"
-        );
-      } else {
-        // =================================================
-        // OTHER PROVIDERS
-        // =================================================
-
-        alert(
-          "For security, please log out and log in again, then try deleting your account."
-        );
-
-        setDeletingAccount(false);
-
-        return;
-      }
-
-      // =================================================
-      // FIREBASE TOKEN REFRESH
-      // =================================================
-
-      await currentUser.getIdToken(true);
-
-      console.log(
-        "Firebase authentication refreshed"
-      );
-
-      // =================================================
-      // DELETE FIREBASE ACCOUNT FIRST
-      // =================================================
-      //
-      // IMPORTANT:
-      // We do this AFTER re-authentication.
-      //
-      // This prevents:
-      //
-      // MongoDB deleted
-      // ↓
-      // Firebase deletion fails
-      // ↓
-      // MongoDB user no longer exists
-      //
-      // =================================================
+      const firebaseUid =
+        currentUser.uid;
 
       console.log(
         "Deleting Firebase account..."
       );
 
-      await deleteUser(currentUser);
+      // =================================================
+      // DELETE FIREBASE ACCOUNT FIRST
+      // =================================================
+
+      await deleteUser(
+        currentUser
+      );
 
       console.log(
         "Firebase account deleted successfully"
@@ -310,7 +422,6 @@ export default function Settings() {
         `${API_URL}/api/users/${firebaseUid}`,
         {
           method: "DELETE",
-
           headers: {
             "Content-Type":
               "application/json",
@@ -318,8 +429,13 @@ export default function Settings() {
         }
       );
 
-      const data =
-        await response.json();
+      let data = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
 
       console.log(
         "MongoDB delete response:",
@@ -327,27 +443,23 @@ export default function Settings() {
         data
       );
 
-      // =================================================
-      // HANDLE MONGODB RESULT
-      // =================================================
+      // -----------------------------------------------
+      // 404 IS ACCEPTED
+      // -----------------------------------------------
+      //
+      // Firebase is already deleted.
+      // If MongoDB user doesn't exist anymore,
+      // account deletion is still complete.
+      //
 
-      if (!response.ok && response.status !== 404) {
-        console.error(
-          "MongoDB account deletion failed:",
-          data
+      if (
+        !response.ok &&
+        response.status !== 404
+      ) {
+        throw new Error(
+          data.message ||
+            "Failed to delete MongoDB account"
         );
-
-        // Firebase is already deleted.
-        // We do not want to tell the user that
-        // the entire deletion failed.
-
-        alert(
-          "Firebase account was deleted, but some profile data could not be removed from MongoDB. Please contact the administrator."
-        );
-
-        setDeletingAccount(false);
-
-        return;
       }
 
       // =================================================
@@ -367,112 +479,74 @@ export default function Settings() {
       );
 
       // =================================================
-      // SUCCESS
+      // SHOW SUCCESS MODAL
       // =================================================
 
-      alert(
-        "Your account has been permanently deleted."
-      );
+      setPassword("");
+      setShowPasswordModal(false);
+      setShowDeleteConfirm(false);
 
-      // =================================================
-      // REDIRECT
-      // =================================================
+      setDeletingAccount(false);
 
-      navigate("/login", {
-        replace: true,
-      });
+      setShowDeleteSuccess(true);
+
     } catch (error) {
       console.error(
         "DELETE ACCOUNT ERROR:",
         error
       );
 
-      // =================================================
-      // WRONG PASSWORD
-      // =================================================
+      setDeletingAccount(false);
+
+      // -----------------------------------------------
+      // RECENT LOGIN REQUIRED
+      // -----------------------------------------------
 
       if (
         error.code ===
-        "auth/invalid-credential"
-      ) {
-        alert(
-          "Incorrect password. Please enter your current password."
-        );
-      }
-
-      // =================================================
-      // WRONG PASSWORD - OLD FIREBASE VERSION
-      // =================================================
-
-      else if (
-        error.code ===
-        "auth/wrong-password"
-      ) {
-        alert(
-          "Incorrect password. Please enter your current password."
-        );
-      }
-
-      // =================================================
-      // RECENT LOGIN REQUIRED
-      // =================================================
-
-      else if (
-        error.code ===
         "auth/requires-recent-login"
       ) {
-        alert(
-          "Your login session is too old. Please log out and log in again, then try deleting your account."
-        );
-      }
+        setShowPasswordModal(false);
 
-      // =================================================
-      // USER ALREADY DELETED
-      // =================================================
-
-      else if (
-        error.code ===
-        "auth/user-token-expired"
-      ) {
-        alert(
-          "Your session has expired. Please log in again."
+        setErrorMessage(
+          "For security, please log out and log in again, then try deleting your account."
         );
 
-        navigate("/login", {
-          replace: true,
-        });
+        return;
       }
 
-      // =================================================
+      // -----------------------------------------------
       // FIREBASE USER NOT FOUND
-      // =================================================
+      // -----------------------------------------------
 
-      else if (
+      if (
         error.code ===
         "auth/user-not-found"
       ) {
-        alert(
-          "This Firebase account no longer exists."
-        );
+        setShowPasswordModal(false);
+        setShowDeleteConfirm(false);
+        setShowDeleteSuccess(true);
 
-        navigate("/login", {
-          replace: true,
-        });
+        return;
       }
 
-      // =================================================
-      // OTHER ERROR
-      // =================================================
-
-      else {
-        alert(
-          error.message ||
-            "Failed to delete account."
-        );
-      }
-
-      setDeletingAccount(false);
+      setErrorMessage(
+        error.message ||
+          "Failed to delete account."
+      );
     }
+  };
+
+  // =====================================================
+  // SUCCESS MODAL OK
+  // =====================================================
+
+  const handleSuccessOK = () => {
+    setShowDeleteSuccess(false);
+
+    navigate("/login", {
+      replace: true,
+    });
   };
 
   // =====================================================
@@ -766,13 +840,11 @@ export default function Settings() {
 
           </div>
 
-          {/* ACCOUNT SECURITY */}
-
           <button
             type="button"
             className="security-button"
             onClick={() => {
-              alert(
+              setErrorMessage(
                 "Your account is protected by Firebase Authentication."
               );
             }}
@@ -794,13 +866,11 @@ export default function Settings() {
 
           </button>
 
-          {/* PASSWORD */}
-
           <button
             type="button"
             className="security-button"
             onClick={() => {
-              alert(
+              setErrorMessage(
                 "Password management is handled by Firebase Authentication."
               );
             }}
@@ -868,7 +938,7 @@ export default function Settings() {
             type="button"
             className="delete-account-button"
             onClick={
-              openDeleteModal
+              openDeleteConfirmation
             }
           >
             <Trash2 size={18} />
@@ -883,6 +953,7 @@ export default function Settings() {
                 account and messages
               </span>
             </div>
+
           </button>
 
         </section>
@@ -890,7 +961,51 @@ export default function Settings() {
       </div>
 
       {/* =================================================
-          DELETE ACCOUNT MODAL
+          ERROR MESSAGE
+      ================================================= */}
+
+      {errorMessage && (
+        <div className="settings-message-overlay">
+
+          <div className="settings-error-modal">
+
+            <button
+              className="settings-error-close"
+              onClick={() =>
+                setErrorMessage("")
+              }
+            >
+              <X size={18} />
+            </button>
+
+            <div className="settings-error-icon">
+              <AlertTriangle size={26} />
+            </div>
+
+            <h2>
+              Something went wrong
+            </h2>
+
+            <p>
+              {errorMessage}
+            </p>
+
+            <button
+              className="settings-error-button"
+              onClick={() =>
+                setErrorMessage("")
+              }
+            >
+              OK
+            </button>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* =================================================
+          DELETE CONFIRMATION MODAL
       ================================================= */}
 
       {showDeleteConfirm && (
@@ -899,9 +1014,7 @@ export default function Settings() {
           <div className="delete-modal">
 
             <div className="delete-warning-icon">
-              <AlertTriangle
-                size={30}
-              />
+              <AlertTriangle size={30} />
             </div>
 
             <h2>
@@ -915,41 +1028,13 @@ export default function Settings() {
               deleted.
             </p>
 
-            {/* =================================================
-                PASSWORD
-            ================================================= */}
-
-            <div className="delete-password-wrapper">
-
-              <label htmlFor="delete-password">
-                Enter your current password
-              </label>
-
-              <input
-                id="delete-password"
-                type="password"
-                value={password}
-                onChange={(e) =>
-                  setPassword(
-                    e.target.value
-                  )
-                }
-                placeholder="Current password"
-                disabled={
-                  deletingAccount
-                }
-                autoComplete="current-password"
-              />
-
-            </div>
-
             <div className="delete-modal-actions">
 
               <button
                 type="button"
                 className="cancel-delete-button"
                 onClick={
-                  closeDeleteModal
+                  closeDeleteConfirmation
                 }
                 disabled={
                   deletingAccount
@@ -962,19 +1047,160 @@ export default function Settings() {
                 type="button"
                 className="confirm-delete-button"
                 onClick={
-                  handleDeleteAccount
+                  startDeleteProcess
                 }
                 disabled={
-                  deletingAccount ||
-                  !password.trim()
+                  deletingAccount
+                }
+              >
+                Yes, delete account
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* =================================================
+          PASSWORD RE-AUTHENTICATION MODAL
+      ================================================= */}
+
+      {showPasswordModal && (
+        <div className="delete-modal-overlay">
+
+          <div className="password-modal">
+
+            <button
+              type="button"
+              className="password-modal-close"
+              onClick={() => {
+                if (!deletingAccount) {
+                  setShowPasswordModal(
+                    false
+                  );
+
+                  setPassword("");
+                  setErrorMessage("");
+                }
+              }}
+              disabled={
+                deletingAccount
+              }
+            >
+              <X size={20} />
+            </button>
+
+            <div className="password-warning-icon">
+              <Lock size={27} />
+            </div>
+
+            <h2>
+              Confirm your identity
+            </h2>
+
+            <p>
+              For security, enter your
+              current password before
+              deleting your account.
+            </p>
+
+            <input
+              type="password"
+              value={password}
+              onChange={(event) =>
+                setPassword(
+                  event.target.value
+                )
+              }
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              disabled={
+                deletingAccount
+              }
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter"
+                ) {
+                  handleReauthentication();
+                }
+              }}
+            />
+
+            <div className="password-modal-actions">
+
+              <button
+                type="button"
+                className="cancel-delete-button"
+                onClick={() => {
+                  setShowPasswordModal(
+                    false
+                  );
+
+                  setPassword("");
+                  setErrorMessage("");
+                }}
+                disabled={
+                  deletingAccount
+                }
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="confirm-delete-button"
+                onClick={
+                  handleReauthentication
+                }
+                disabled={
+                  deletingAccount
                 }
               >
                 {deletingAccount
                   ? "Deleting..."
-                  : "Yes, delete account"}
+                  : "Confirm deletion"}
               </button>
 
             </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* =================================================
+          SUCCESS MODAL
+      ================================================= */}
+
+      {showDeleteSuccess && (
+        <div className="success-modal-overlay">
+
+          <div className="success-modal">
+
+            <div className="success-icon">
+              <CheckCircle size={42} />
+            </div>
+
+            <h2>
+              Account Deleted
+            </h2>
+
+            <p>
+              Your account has been
+              permanently deleted.
+            </p>
+
+            <button
+              type="button"
+              className="success-ok-button"
+              onClick={
+                handleSuccessOK
+              }
+            >
+              OK
+            </button>
 
           </div>
 

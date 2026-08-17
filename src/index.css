@@ -5641,3 +5641,617 @@ body.dark-mode .settings-page .radio-button {
     width: 100%;
   }
 }
+
+/* =====================================================
+   SETTINGS MODALS
+===================================================== */
+
+.delete-modal-overlay,
+.success-modal-overlay,
+.settings-message-overlay {
+  position: fixed;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.55);
+
+  backdrop-filter: blur(5px);
+
+  -webkit-backdrop-filter: blur(5px);
+
+  z-index: 99999;
+
+  animation: settingsOverlayFade 0.2s ease;
+}
+
+
+/* =====================================================
+   DELETE MODAL
+===================================================== */
+
+.delete-modal,
+.password-modal,
+.settings-error-modal,
+.success-modal {
+  position: relative;
+
+  width: 100%;
+  max-width: 430px;
+
+  padding: 32px;
+
+  background: #ffffff;
+
+  border-radius: 20px;
+
+  text-align: center;
+
+  box-shadow:
+    0 25px 70px rgba(0, 0, 0, 0.25);
+
+  animation: settingsModalShow 0.25s ease;
+}
+
+
+/* =====================================================
+   DELETE WARNING ICON
+===================================================== */
+
+.delete-warning-icon {
+  width: 68px;
+  height: 68px;
+
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #fff4e5;
+
+  color: #f59e0b;
+
+  border: 4px solid #ffedd5;
+}
+
+
+/* =====================================================
+   DELETE TITLE
+===================================================== */
+
+.delete-modal h2,
+.password-modal h2,
+.settings-error-modal h2,
+.success-modal h2 {
+  margin: 0 0 12px;
+
+  font-size: 24px;
+
+  font-weight: 700;
+
+  color: #172033;
+}
+
+
+/* =====================================================
+   DELETE TEXT
+===================================================== */
+
+.delete-modal p,
+.password-modal p,
+.settings-error-modal p,
+.success-modal p {
+  margin: 0 auto 26px;
+
+  max-width: 350px;
+
+  font-size: 15px;
+
+  line-height: 1.6;
+
+  color: #64748b;
+}
+
+
+/* =====================================================
+   DELETE BUTTONS
+===================================================== */
+
+.delete-modal-actions,
+.password-modal-actions {
+  display: flex;
+
+  gap: 12px;
+
+  width: 100%;
+}
+
+
+.cancel-delete-button,
+.confirm-delete-button {
+  flex: 1;
+
+  min-height: 48px;
+
+  padding: 0 18px;
+
+  border: none;
+
+  border-radius: 11px;
+
+  font-size: 15px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    0.2s ease;
+}
+
+
+/* CANCEL */
+
+.cancel-delete-button {
+  background: #f1f5f9;
+
+  color: #334155;
+}
+
+
+.cancel-delete-button:hover {
+  background: #e2e8f0;
+}
+
+
+/* DELETE */
+
+.confirm-delete-button {
+  background: #dc2626;
+
+  color: #ffffff;
+}
+
+
+.confirm-delete-button:hover {
+  background: #b91c1c;
+}
+
+
+.confirm-delete-button:disabled,
+.cancel-delete-button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+}
+
+
+/* =====================================================
+   PASSWORD MODAL
+===================================================== */
+
+.password-warning-icon {
+  width: 68px;
+  height: 68px;
+
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #eff6ff;
+
+  color: #2563eb;
+
+  border: 4px solid #dbeafe;
+}
+
+
+.password-modal input {
+  width: 100%;
+
+  height: 48px;
+
+  box-sizing: border-box;
+
+  margin-bottom: 20px;
+
+  padding: 0 15px;
+
+  border: 1px solid #cbd5e1;
+
+  border-radius: 10px;
+
+  outline: none;
+
+  background: #ffffff;
+
+  color: #172033;
+
+  font-size: 15px;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+
+.password-modal input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 3px rgba(
+      37,
+      99,
+      235,
+      0.12
+    );
+}
+
+
+.password-modal-close {
+  position: absolute;
+
+  top: 15px;
+  right: 15px;
+
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  border-radius: 50%;
+
+  background: #f1f5f9;
+
+  color: #64748b;
+
+  cursor: pointer;
+}
+
+
+.password-modal-close:hover {
+  background: #e2e8f0;
+
+  color: #172033;
+}
+
+
+/* =====================================================
+   SUCCESS MODAL
+===================================================== */
+
+.success-modal {
+  max-width: 430px;
+
+  padding: 35px 30px 30px;
+}
+
+
+.success-icon {
+  width: 75px;
+  height: 75px;
+
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #ecfdf5;
+
+  color: #16a34a;
+
+  border: 4px solid #bbf7d0;
+}
+
+
+.success-modal h2 {
+  color: #172033;
+}
+
+
+.success-modal p {
+  margin-bottom: 28px;
+}
+
+
+/* =====================================================
+   SUCCESS OK BUTTON
+===================================================== */
+
+.success-ok-button,
+.settings-error-button {
+  width: 100%;
+
+  min-height: 48px;
+
+  border: none;
+
+  border-radius: 11px;
+
+  background: #2563eb;
+
+  color: #ffffff;
+
+  font-size: 16px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+
+.success-ok-button:hover,
+.settings-error-button:hover {
+  background: #1d4ed8;
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 8px 20px rgba(
+      37,
+      99,
+      235,
+      0.25
+    );
+}
+
+
+/* =====================================================
+   ERROR MODAL
+===================================================== */
+
+.settings-error-icon {
+  width: 68px;
+  height: 68px;
+
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #fff7ed;
+
+  color: #ea580c;
+
+  border: 4px solid #fed7aa;
+}
+
+
+.settings-error-close {
+  position: absolute;
+
+  top: 15px;
+  right: 15px;
+
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  border-radius: 50%;
+
+  background: #f1f5f9;
+
+  color: #64748b;
+
+  cursor: pointer;
+}
+
+
+.settings-error-close:hover {
+  background: #e2e8f0;
+}
+
+
+/* =====================================================
+   ANIMATIONS
+===================================================== */
+
+@keyframes settingsOverlayFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+@keyframes settingsModalShow {
+  from {
+    opacity: 0;
+
+    transform:
+      scale(0.92)
+      translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      scale(1)
+      translateY(0);
+  }
+}
+
+
+/* =====================================================
+   DARK MODE
+===================================================== */
+
+body.dark-mode .delete-modal,
+body.dark-mode .password-modal,
+body.dark-mode .settings-error-modal,
+body.dark-mode .success-modal {
+  background: #172033;
+
+  box-shadow:
+    0 25px 70px rgba(
+      0,
+      0,
+      0,
+      0.55
+    );
+}
+
+
+body.dark-mode .delete-modal h2,
+body.dark-mode .password-modal h2,
+body.dark-mode .settings-error-modal h2,
+body.dark-mode .success-modal h2 {
+  color: #f8fafc;
+}
+
+
+body.dark-mode .delete-modal p,
+body.dark-mode .password-modal p,
+body.dark-mode .settings-error-modal p,
+body.dark-mode .success-modal p {
+  color: #94a3b8;
+}
+
+
+/* =====================================================
+   DARK MODE - PASSWORD
+===================================================== */
+
+body.dark-mode .password-modal input {
+  background: #0f172a;
+
+  border-color: #334155;
+
+  color: #f8fafc;
+}
+
+
+body.dark-mode .password-modal input::placeholder {
+  color: #64748b;
+}
+
+
+body.dark-mode .password-modal-close,
+body.dark-mode .settings-error-close {
+  background: #243047;
+
+  color: #94a3b8;
+}
+
+
+body.dark-mode .password-modal-close:hover,
+body.dark-mode .settings-error-close:hover {
+  background: #334155;
+
+  color: #f8fafc;
+}
+
+
+/* =====================================================
+   DARK MODE - CANCEL
+===================================================== */
+
+body.dark-mode .cancel-delete-button {
+  background: #243047;
+
+  color: #e2e8f0;
+}
+
+
+body.dark-mode .cancel-delete-button:hover {
+  background: #334155;
+}
+
+
+/* =====================================================
+   MOBILE
+===================================================== */
+
+@media (max-width: 480px) {
+
+  .delete-modal-overlay,
+  .success-modal-overlay,
+  .settings-message-overlay {
+    padding: 16px;
+  }
+
+  .delete-modal,
+  .password-modal,
+  .settings-error-modal,
+  .success-modal {
+    max-width: 100%;
+
+    padding: 28px 20px 24px;
+
+    border-radius: 18px;
+  }
+
+  .delete-warning-icon,
+  .password-warning-icon,
+  .settings-error-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .success-icon {
+    width: 65px;
+    height: 65px;
+  }
+
+  .delete-modal h2,
+  .password-modal h2,
+  .settings-error-modal h2,
+  .success-modal h2 {
+    font-size: 21px;
+  }
+
+  .delete-modal p,
+  .password-modal p,
+  .settings-error-modal p,
+  .success-modal p {
+    font-size: 14px;
+  }
+
+  .delete-modal-actions,
+  .password-modal-actions {
+    flex-direction: column;
+  }
+
+  .cancel-delete-button,
+  .confirm-delete-button {
+    width: 100%;
+  }
+}
